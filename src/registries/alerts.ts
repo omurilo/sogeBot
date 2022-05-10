@@ -100,14 +100,15 @@ class Alerts extends Registry {
 
   sockets () {
     publicEndpoint('/registries/alerts', 'speak', async (opts, cb) => {
+      const { default: tts, services } = await import ('../tts');
+
+      if (!tts.ready) {
+        cb(new Error('TTS is not properly set and ready.'));
+        return;
+      }
+        
       if (secureKeys.has(opts.key)) {
         secureKeys.delete(opts.key);
-
-        const { default: tts, services } = await import ('../tts');
-        if (!tts.ready) {
-          cb(new Error('TTS is not properly set and ready.'));
-          return;
-        }
 
         if (tts.service === services.GOOGLE) {
           try {
@@ -116,6 +117,13 @@ class Alerts extends Registry {
           } catch (e) {
             cb(e);
           }
+        }
+      } else if (tts.service === services.STREAMLABS) {
+        try {
+          const audioContent = await tts.streamLabsSpeak(opts);
+          cb(null, audioContent);
+        } catch (e) {
+          cb(e);
         }
       } else {
         cb(new Error('Invalid auth.'));
@@ -180,29 +188,6 @@ class Alerts extends Registry {
         ...data,
         monthsName: getLocalizedName(data.amount, translate('core.months')),
       }, true);
-    });
-
-    publicEndpoint('/registries/alerts', 'speak', async (opts, cb) => {
-      if (secureKeys.has(opts.key)) {
-        secureKeys.delete(opts.key);
-
-        const { default: tts, services } = await import ('../tts');
-        if (!tts.ready) {
-          cb(new Error('TTS is not properly set and ready.'));
-          return;
-        }
-
-        if (tts.service === services.GOOGLE) {
-          try {
-            const audioContent = await tts.googleSpeak(opts);
-            cb(null, audioContent);
-          } catch (e) {
-            cb(e);
-          }
-        }
-      } else {
-        cb(new Error('Invalid auth.'));
-      }
     });
   }
 

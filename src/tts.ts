@@ -13,6 +13,7 @@ import {
 } from '~/decorators/on';
 import { error, info, warning } from '~/helpers/log';
 import { adminEndpoint, publicEndpoint } from '~/helpers/socket';
+import StreamLabs from '~/services/streamlabs';
 
 /* secureKeys are used to authenticate use of public overlay endpoint */
 const secureKeys = new Set<string>();
@@ -20,7 +21,8 @@ const secureKeys = new Set<string>();
 export enum services {
   'NONE' = -1,
   'RESPONSIVEVOICE',
-  'GOOGLE'
+  'GOOGLE',
+  'STREAMLABS'
 }
 
 let jwtClient: null | JWT = null;
@@ -36,6 +38,9 @@ class TTS extends Core {
     googlePrivateKey = '';
   @settings()
     googleVoices: string[] = [];
+  
+  @settings()
+    streamlabsVoices: string[] = [];
 
   addSecureKey(key: string) {
     secureKeys.add(key);
@@ -56,14 +61,21 @@ class TTS extends Core {
       }
     });
 
+    adminEndpoint('/core/tts', 'streamlabs::speak', async (opts, cb) => {
+      const audioContent = await this.streamLabsSpeak(opts);
+      if (cb) {
+        cb(null, audioContent);
+      }
+    });
+
     publicEndpoint('/core/tts', 'speak', async (opts, cb) => {
+      if (!this.ready) {
+        cb(new Error('TTS is not properly set and ready.'));
+        return;
+      }
+
       if (secureKeys.has(opts.key)) {
         secureKeys.delete(opts.key);
-
-        if (!this.ready) {
-          cb(new Error('TTS is not properly set and ready.'));
-          return;
-        }
 
         if (this.service === services.GOOGLE) {
           try {
@@ -72,6 +84,15 @@ class TTS extends Core {
           } catch (e) {
             cb(e);
           }
+        }
+      } else if(this.service === services.STREAMLABS) {
+        try {
+          const audioContent = await this.streamLabsSpeak(opts);
+          info(audioContent);
+          cb(null, audioContent);
+        } catch (e) {
+          info(e);
+          cb(e);
         }
       } else {
         cb(new Error('Invalid auth.'));
@@ -140,6 +161,11 @@ class TTS extends Core {
           warning('TTS: ResponsiveVoice ApiKey is not properly set.');
         }
         break;
+      case services.STREAMLABS:
+        this.streamlabsVoices = StreamLabs.getVoices().sort();
+        info(`TTS: Cached ${this.streamlabsVoices.length} Streamlabs voices.`);
+        info('TTS: Streamlabs ready.');
+        break;
     }
   }
 
@@ -155,6 +181,17 @@ class TTS extends Core {
     if (this.service === services.GOOGLE) {
       return this.googlePrivateKey.length > 0;
     }
+
+    if (this.service === services.STREAMLABS) {
+      return true;
+    }
+  }
+
+  async streamLabsSpeak(opts: {
+    text: string;
+    voice: string;
+  }) {
+    return StreamLabs.speak(opts);
   }
 
   async googleSpeak(opts: {

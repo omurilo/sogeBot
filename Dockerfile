@@ -2,8 +2,8 @@ FROM node:16-bullseye-slim
 
 ENV LAST_UPDATED 2022-09-30-2037
 
-ENV NODE_ENV production
-ENV ENV production
+ENV NODE_ENV development
+ENV ENV development
 
 RUN apt-get update
 RUN apt-get install -y build-essential unzip nasm libtool make bash git autoconf wget zlib1g-dev python3
