@@ -1,11 +1,11 @@
 import { v4 } from 'uuid';
 
-import {
-  command, default_permission,
-} from '../decorators';
-import { warning } from '../helpers/log';
 import Overlay from './_interface';
 
+import {
+  command, default_permission,
+} from '~/decorators';
+import { warning } from '~/helpers/log';
 import { defaultPermissions } from '~/helpers/permissions/index';
 
 class TextToSpeech extends Overlay {
