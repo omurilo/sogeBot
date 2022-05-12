@@ -100,13 +100,13 @@ class Alerts extends Registry {
           } catch (e) {
             cb(e);
           }
-        }
-      } else if (tts.service === services.STREAMLABS) {
-        try {
-          const audioContent = await tts.streamLabsSpeak(opts);
-          cb(null, audioContent);
-        } catch (e) {
-          cb(e);
+        } else if (tts.service === services.STREAMLABS) {
+          try {
+            const audioContent = await tts.streamLabsSpeak(opts);
+            cb(null, audioContent);
+          } catch (e) {
+            cb(e);
+          }
         }
       } else {
         cb(new Error('Invalid auth.'));

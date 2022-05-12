@@ -85,7 +85,7 @@ class TTS extends Core {
             cb(e);
           }
         }
-      } else if(this.service === services.STREAMLABS) {
+      } else if (this.service === services.STREAMLABS) {
         try {
           const audioContent = await this.streamLabsSpeak(opts);
           info(audioContent);
