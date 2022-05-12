@@ -14,7 +14,7 @@
     "@sogebot/ui-admin": "^68.1.1",
     "@sogebot/ui-helpers": "^3.1.0",
     "@sogebot/ui-oauth": "~3.1.1",
-    "@sogebot/ui-overlay": "^34.0.1",
+    "@sogebot/ui-overlay": "file:./packages/ui-overlay",
     "@sogebot/ui-public": "^4.0.0",
     "@twurple/api": "^5.2.7",
     "@twurple/auth": "^5.2.7",
@@ -99,9 +99,10 @@
     "test:config:mysql": "cp src/data/.env.mysql .env",
     "test:config:postgres": "cp src/data/.env.postgres .env",
     "test:config:sqlite": "cp src/data/.env.sqlite .env",
-    "start": "cross-env NODE_ENV=production node --experimental-report --report-on-fatalerror --report-directory=./logs/ --optimize_for_size --gc_interval=100 -r source-map-support/register  ./dest/main",
-    "debug": "cross-env NODE_ENV=development node --inspect --experimental-report --report-on-fatalerror --report-directory=./logs/ --trace-warnings --optimize_for_size --gc_interval=100 -r source-map-support/register --inspect=0.0.0.0:9229 --nolazy ./dest/main",
-    "gc": "cross-env NODE_ENV=development node --inspect --experimental-report --report-on-fatalerror --report-directory=./logs/ --trace-warnings --trace_gc --trace_gc_verbose --optimize_for_size --gc_interval=100 -r source-map-support/register --inspect=0.0.0.0:9229 --nolazy ./dest/main"
+    "start": "cross-env NODE_ENV=production node --experimental-report --report-on-fatalerror --report-directory=./logs/ --always_compact --optimize_for_size --gc_interval=100 -r source-map-support/register  ./dest/main",
+    "debug": "cross-env NODE_ENV=development node --inspect --experimental-report --report-on-fatalerror --report-directory=./logs/ --trace-warnings --always_compact --optimize_for_size --gc_interval=100 -r source-map-support/register --inspect=0.0.0.0:9229 --nolazy ./dest/main",
+    "gc": "cross-env NODE_ENV=development node --inspect --experimental-report --report-on-fatalerror --report-directory=./logs/ --trace-warnings --trace_gc --trace_gc_verbose --always_compact --optimize_for_size --gc_interval=100 -r source-map-support/register --inspect=0.0.0.0:9229 --nolazy ./dest/main",
+    "dev": "npm run build && cross-env NODE_ENV=development node --experimental-report --report-on-fatalerror --report-directory=./logs/ --trace-warnings --always_compact --optimize_for_size --gc_interval=100 -r source-map-support/register --inspect=0.0.0.0:9229 --nolazy ./dest/main"
   },
   "devDependencies": {
     "@devexpress/dx-react-grid": "^3.0.6",

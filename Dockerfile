@@ -27,9 +27,20 @@ RUN chmod +x /docker.sh
 # Install packages and clean .npm cache (not needed)
 RUN npm ci && npm cache clean --force
 
+FROM node:16-bullseye-slim
+
+COPY --from=builder /app /app
+
+WORKDIR /app
+
+VOLUME "./logs" "/app/logs"
+
 # Expose API port to the outside
 EXPOSE 20000
 # Expose profiler to the outside
 EXPOSE 9229
 
-ENTRYPOINT ["/docker.sh"]
+# Add startup script
+COPY docker.sh /app
+RUN chmod +x /app/docker.sh
+ENTRYPOINT ["/app/docker.sh"]
