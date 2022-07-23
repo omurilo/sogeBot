@@ -324,8 +324,9 @@ class Discord extends Integration {
     try {
       // TODO: ban user by reason
       const { username, reason } = this.extractUsernameAndReasonFromMsg(opts)
-      info(opts.sender)
-      if (!isModerator(opts.sender)) {
+      const user = await changelog.getOrFail(opts.sender.userId);
+
+      if (!isModerator(user)) {
         return [
           { response: prepare('permissions.without-permission', { command: this.getCommand('!ban') }), ...opts },
         ];
@@ -727,7 +728,7 @@ class Discord extends Integration {
       }
     } catch (e: any) {
       const message = prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') });
-      if (msg && !msg.content.startsWith("!")) {
+      if (msg && msg.content.startsWith("!")) {
         const reply = await msg.reply(message);
         chatOut(`#${channel.name}: @${author.tag}, ${message} [${author.tag}]`);
         if (this.deleteMessagesAfterWhile) {
