@@ -322,9 +322,10 @@ class Discord extends Integration {
   async banUser(opts: CommandOptions) {
     try {
       // TODO: ban user by reason
-      const { username, reason } = this.extractUsernameAndReasonFromMsg(opts);
-      info(opts.sender);
-      if (!isModerator(opts.sender)) {
+      const { username, reason } = this.extractUsernameAndReasonFromMsg(opts)
+      const user = await changelog.getOrFail(opts.sender.userId);
+
+      if (!isModerator(user)) {
         return [
           { response: prepare('permissions.without-permission', { command: this.getCommand('!ban') }), ...opts },
         ];
