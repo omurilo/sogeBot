@@ -44,6 +44,7 @@ import * as changelog from '~/helpers/user/changelog.js';
 import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
 import { variables } from '~/watchers';
 import { isModerator } from '../helpers/user';
+import { tmiEmitter } from '../helpers/tmi';
 
 class Discord extends Integration {
   client: DiscordJs.Client | null = null;
@@ -332,27 +333,31 @@ class Discord extends Integration {
         ];
       }
 
+      tmiEmitter.emit('ban', username);
       eventEmitter.emit('ban', {
         userName: username,
         reason: reason || '<no reason>'
       });
 
       const embed = new DiscordJs.MessageEmbed({
-        color: 'DARK_RED',
-        description: 'Essa é uma mensagem de teste do ban do Maic',
+        color: opts.discord?.author.accentColor || 'DARK_RED',
+        description: `${opts.sender} baniu um usuário na live`,
         title: 'Usuário banido na live',
-        fields: [{ name: 'username', value: username }, { name: 'motivo', value: reason }],
+        fields: [{ name: 'Nome de usuário', value: username }, { name: 'Motivo', value: reason }],
         footer: {
           text: 'Esse já era ou alguém é contra?'
-        }
+        },
+        author: {
+          name: opts.sender.displayName,
+          icon_url: opts.discord?.author.avatarURL() || ''
+        },
+        timestamp: new Date(),
       });
 
-      const message = await opts.discord?.channel.send({ embeds: [embed] });
+      const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.general)
 
-      if (message) {
-        this.embedMessageId = message.id;
-      }
-      chatOut(`#${opts.discord?.channel.name}: [[user banned on live]] [${username}]`);
+      await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
+      chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
     } catch (e: any) {
       if (e.message.includes('Expected parameter') || e.message.includes("<username>")) {
         return [
