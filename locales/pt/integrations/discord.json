@@ -5,6 +5,7 @@
   "this-account-was-linked-with": "$sender, sua conta foi vinculada com $discordTag.",
   "invalid-or-expired-token": "$sender, token inválido ou expirado.",
   "help-message": "$sender, para vincular sua conta no Discord: 1. Vá ao servidor Discord server e envie $command no canal de bot. | 2. Aguarde a MP do bot | 3. Envie o comando de sua MP do Discord aqui no chat da Twitch.",
+  "ban-help-message": "$sender para banir um usuário da twitch pelo Discord, use $command username:nome_do_usuário reason:motivo do banimento (opcional)",
   "started-at": "Iniciou em",
   "announced-by": "Anunciado por sogeBot",
   "streamed-at": "Transmitido em",
