@@ -359,7 +359,7 @@ class Discord extends Integration {
       await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
       chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
     } catch (e: any) {
-      if (e.message.includes('Expected parameter') || e.message.includes("<username>")) {
+      if (e.message.includes('Expected parameter')) {
         return [
           { response: prepare('integrations.discord.ban-help-message', { sender: opts.sender, command: this.getCommand('!ban') }), ...opts },
         ];
@@ -671,6 +671,16 @@ class Discord extends Integration {
         await getRepository(DiscordLink).delete({ discordId: author.id });
         const reply = await msg.reply(prepare('integrations.discord.all-your-links-were-deleted'));
         chatOut(`#${channel.name}: @${author.tag}, ${prepare('integrations.discord.all-your-links-were-deleted')} [${author.tag}]`);
+        if (this.deleteMessagesAfterWhile) {
+          setTimeout(() => {
+            msg.delete();
+            reply.delete();
+          }, 10000);
+        }
+        return;
+      } else if (content === this.getCommand('!ban')) {
+        const reply = await msg.reply(prepare('integrations.discord.ban-help-message', { command: this.getCommand("!ban"), sender: author.username }));
+        chatOut(`#${channel.name}: @${author.tag}, ${prepare('integrations.discord.ban-help-message')} [${author.tag}]`);
         if (this.deleteMessagesAfterWhile) {
           setTimeout(() => {
             msg.delete();
