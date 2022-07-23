@@ -683,6 +683,16 @@ class Discord extends Integration {
           }, 10000);
         }
         return;
+      } else if (content === this.getCommand('!ban')) {
+        const reply = await msg.reply(prepare('integrations.discord.ban-help-message', { command: this.getCommand("!ban"), sender: author.username }));
+        chatOut(`#${channel.name}: @${author.tag}, ${prepare('integrations.discord.ban-help-message')} [${author.tag}]`);
+        if (this.deleteMessagesAfterWhile) {
+          setTimeout(() => {
+            msg.delete();
+            reply.delete();
+          }, 10000);
+        }
+        return;
       }
     }
     try {
