@@ -7,5 +7,5 @@ then
   npm start
 else
   echo 'Starting bot with DEBUG flag, inspect exposed at 0.0.0.0:9229'
-  npm run debug
+  npm debug
 fi

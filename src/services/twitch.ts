@@ -60,9 +60,6 @@ class Twitch extends Service {
   @persistent() // needs to be persistent as we are using it with variables.get
     broadcasterTokenValid = false;
 
-  @persistent()
-    currentChannel = '';
-
   @settings('general')
     isTitleForced = false;
 
@@ -122,7 +119,7 @@ class Twitch extends Service {
   @settings('broadcaster')
     broadcasterCurrentScopes: string[] = [];
   @persistent()
-    broadcasterType = '';
+    broadcasterType: string | null = null;
 
   @settings('bot')
     botAccessToken = '';
@@ -236,6 +233,7 @@ class Twitch extends Service {
         if (value === '') {
           cache.broadcaster = 'force_reconnect';
           emitter.emit('set', '/services/twitch', 'broadcasterUsername', '');
+          emitter.emit('set', '/services/twitch', 'broadcasterType', null);
           tmiEmitter.emit('part', 'broadcaster');
         } else {
           setTimeout(() => {
@@ -322,8 +320,8 @@ class Twitch extends Service {
   reconnectOnStreamStart() {
     this.uptime = 0;
     if (this.enabled) {
-      this.tmi?.part('bot').then(() => this.tmi?.join('bot', this.currentChannel));
-      this.tmi?.part('broadcaster').then(() => this.tmi?.join('broadcaster', this.currentChannel));
+      this.tmi?.part('bot').then(() => this.tmi?.join('bot', this.broadcasterUsername));
+      this.tmi?.part('broadcaster').then(() => this.tmi?.join('broadcaster', this.broadcasterUsername));
     }
   }
 

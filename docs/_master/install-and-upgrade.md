@@ -24,7 +24,7 @@
    IP address for your database connections.
 
 1. Download `Docker Compose` files
-    - From GIT: `git clone git@github.com:sogehige/sogeBot-docker.git`
+    - From GIT: `git clone git@github.com:sogebot/sogeBot-docker.git`
     - Without GIT as [ZIP](https://github.com/sogehige/sogeBot-docker/archive/master.zip)
 2. Configure properly .env file in `root` directory
     - You can find examples at [our GitHub repository](https://github.com/sogebot/sogeBot/tree/master/src/data)
@@ -69,7 +69,7 @@
   in [Permissions settings](http://twitch.tv/dashboard/permissions) on Twitch
 - be sure that you have latest npm installed
 
-    `npm install -g npm@latest`
+    `npm install --location=global npm@latest`
 
 - before starting a bot, you need to install npm dependencies
 
@@ -104,7 +104,7 @@
   in [Permissions settings](http://twitch.tv/dashboard/permissions) on Twitch
 - be sure that you have latest npm installed
 
-    `npm install -g npm@latest`
+    `npm install --location=global npm@latest`
 
 - before starting a bot, you need to build a bot
 
@@ -121,18 +121,6 @@
 
 1. Backup your database
 2. Update bot with `git pull -r origin master`
-3. Run `npm install -g npm@latest`
+3. Run `npm install --location=global npm`
 4. Run `make`
 5. Start bot `npm start`
-
-## Unofficial Installer
-
-- Download the binary (linux) or exe (windows) from https://github.com/liadala/sogeToGo/releases
-- Execute the Binary/Exe
-- Add bot as channel editor
-  in [Permissions settings](http://twitch.tv/dashboard/permissions) on Twitch
-
-- To access webpanel, go to `http://localhost:20000`
-
-This will also keep your Bot updated (check on every start)
-for issues or problems please open a [issue](https://github.com/liadala/sogeToGo/issues) at this repository

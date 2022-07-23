@@ -39,10 +39,10 @@ jobs:
     - name: Install latest npm
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: |
-        npm install -g npm@latest
+        npm install --location=global npm
     - name: Install all dependencies and build just a bot
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
-      run: ENV=development make info clean dependencies bot
+      run: ENV=development NODE_MODULES_DIR=./node_modules make info clean dependencies bot
     - name: Set proper db to use
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: npm run test:config:postgres
@@ -77,10 +77,10 @@ jobs:
     - name: Install latest npm
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: |
-        npm install -g npm@latest
+        npm install --location=global npm
     - name: Install all dependencies and build just a bot
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
-      run: ENV=development make info clean dependencies bot
+      run: ENV=development NODE_MODULES_DIR=./node_modules make info clean dependencies bot
     - name: Set proper db to use
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: npm run test:config:postgres
@@ -121,10 +121,10 @@ jobs:
     - name: Install latest npm
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: |
-        npm install -g npm@latest
+        npm install --location=global npm
     - name: Install all dependencies and build just a bot
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
-      run: ENV=development make info clean dependencies bot
+      run: ENV=development NODE_MODULES_DIR=./node_modules make info clean dependencies bot
     - name: Set proper db to use
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: npm run test:config:postgres
@@ -165,10 +165,10 @@ jobs:
     - name: Install latest npm
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: |
-        npm install -g npm@latest
+        npm install --location=global npm
     - name: Install all dependencies and build just a bot
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
-      run: ENV=development make info clean dependencies bot
+      run: ENV=development NODE_MODULES_DIR=./node_modules make info clean dependencies bot
     - name: Set proper db to use
       if: "!contains(steps.log.outputs.MESSAGE, '[skip-tests]')"
       run: npm run test:config:postgres

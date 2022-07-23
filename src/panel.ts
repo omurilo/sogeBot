@@ -9,7 +9,7 @@ import { graphqlHTTP } from 'express-graphql';
 import RateLimit from 'express-rate-limit';
 import gitCommitInfo from 'git-commit-info';
 import jwt from 'jsonwebtoken';
-import _, { isEqual } from 'lodash';
+import _ from 'lodash';
 import sanitize from 'sanitize-filename';
 import {
   getConnection, getManager, getRepository,
@@ -184,12 +184,33 @@ class Panel extends Core {
         res.sendStatus(404);
       }
     });
+    app?.get(['/public/_next/*'], (req, res) => {
+      if (!nuxtCache.get(req.url)) {
+      // search through node_modules to find correct nuxt file
+        const paths = [
+          path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-public', 'out', '_next'),
+        ];
+        for (const dir of paths) {
+          const url = req.url.replace('public', '').replace('_next', '');
+          const pathToFile = path.join(dir, url);
+          if (fs.existsSync(pathToFile)) { // lgtm [js/path-injection]
+            nuxtCache.set(req.url, pathToFile);
+          }
+        }
+      }
+      const filepath = path.join(nuxtCache.get(req.url) ?? '');
+      if (fs.existsSync(filepath) && nuxtCache.has(req.url)) { // lgtm [js/path-injection]
+        res.sendFile(filepath);
+      } else {
+        nuxtCache.delete(req.url);
+        res.sendStatus(404);
+      }
+    });
     app?.get(['/_nuxt/*', '/credentials/_nuxt/*', '/overlays/_nuxt/*'], (req, res) => {
       if (!nuxtCache.get(req.url)) {
       // search through node_modules to find correct nuxt file
         const paths = [
           path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-oauth', 'dist', '_nuxt'),
-          path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-public', 'dist', '_nuxt'),
           path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-admin', 'dist', '_nuxt'),
           path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-overlay', 'dist', '_nuxt'),
         ];
@@ -220,9 +241,9 @@ class Panel extends Core {
     app?.get(['/overlays/:id', '/overlays/text/:id', '/overlays/alerts/:id', '/overlays/goals/:id'], function (req, res) {
       res.sendFile(path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-overlay', 'dist', 'index.html'));
     });
-    app?.get('/public/', function (req, res) {
+    app?.get('/public/:page?', function (req, res) {
       if (variables.get('core.ui.enablePublicPage')) {
-        res.sendFile(path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-public', 'dist', 'index.html'));
+        res.sendFile(path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-public', 'out', `${req.params.page ?? 'index'}.html`));
       } else {
         if (req.originalUrl !== '/public/?check=true') {
           info('Public page has been disabled, enable in Admin UI -> settings -> ui');
@@ -268,10 +289,6 @@ class Panel extends Core {
         res.sendFile(path.join(__dirname, '..', 'assets', 'updating.html'));
       }
     });
-
-    setTimeout(() => {
-      adminEndpoint('/', 'panel::resetStatsState', () => lastDataSent = null);
-    }, 5000);
 
     ioServer?.use(socketSystem.authorize as any);
 
@@ -545,8 +562,8 @@ class Panel extends Core {
       socket.on('name', function (cb: (botUsername: string) => void) {
         cb(variables.get('services.twitch.botUsername') as string);
       });
-      socket.on('channelName', function (cb: (currentChannel: string) => void) {
-        cb(variables.get('services.twitch.currentChannel') as string);
+      socket.on('channelName', function (cb: (broadcasterUsername: string) => void) {
+        cb(variables.get('services.twitch.broadcasterUsername') as string);
       });
       socket.on('version', function (cb: (version: string) => void) {
         const version = _.get(process, 'env.npm_package_version', 'x.y.z');
@@ -589,7 +606,6 @@ export const getApp = function () {
   return app;
 };
 
-let lastDataSent: null | Record<string, unknown> = null;
 const sendStreamData = async () => {
   try {
     if (!translateLib.isLoaded) {
@@ -621,10 +637,7 @@ const sendStreamData = async () => {
       currentWatched:     stats.value.currentWatchedTime,
       tags:               currentStreamTags.value,
     };
-    if (!isEqual(data, lastDataSent)) {
-      ioServer?.emit('panel::stats', data);
-    }
-    lastDataSent = data;
+    ioServer?.emit('panel::stats', data);
   } catch (e: any) {
     if (e instanceof Error) {
       if (e.message !== 'Translation not yet loaded') {
@@ -632,7 +645,7 @@ const sendStreamData = async () => {
       }
     }
   }
-  setTimeout(async () => await sendStreamData(), 5000);
+  setTimeout(async () => await sendStreamData(), 1000);
 };
 
 export default new Panel();

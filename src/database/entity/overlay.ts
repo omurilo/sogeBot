@@ -17,6 +17,30 @@ export interface OverlayMapperReference extends OverlayMapperInterfaceCommon {
   }
 }
 
+export interface OverlayMapperChat extends OverlayMapperInterfaceCommon {
+  value: 'chat';
+  opts: {
+    type: 'vertical' | 'horizontal' | 'niconico';
+    hideMessageAfter: number;
+    showTimestamp: boolean;
+    font: {
+      family: string;
+      size: number;
+      borderPx: number;
+      borderColor: string;
+      weight: number;
+      color: string;
+      shadow: {
+        shiftRight: number;
+        shiftDown: number;
+        blur: number;
+        opacity: number;
+        color: string;
+      }[];
+    }
+  },
+}
+
 export interface OverlayMapperMarathon extends OverlayMapperInterfaceCommon {
   value: 'marathon';
   opts: {
@@ -321,6 +345,13 @@ export interface OverlayMapperAlertsRegistry extends OverlayMapperInterfaceCommo
   },
 }
 
+export interface OverlayMapperURL extends OverlayMapperInterfaceCommon {
+  value: 'url';
+  opts: {
+    url: string,
+  },
+}
+
 export interface OverlayMapperGroup extends OverlayMapperInterfaceCommon {
   value: 'group';
   opts: {
@@ -338,7 +369,7 @@ export interface OverlayMapperGroup extends OverlayMapperInterfaceCommon {
   }
 }
 
-export type OverlayMappers = OverlayMapperReference | OverlayMapperAlertsRegistry | OverlayMapperCarousel | OverlayMapperMarathon | OverlayMapperStopwatch | OverlayMapperCountdown | OverlayMapperGroup | OverlayMapperEventlist | OverlayMapperEmotesCombo | OverlayMapperCredits | OverlayMapperClips | OverlayMapperAlerts | OverlayMapperEmotes | OverlayMapperEmotesExplode | OverlayMapperEmotesFireworks | OverlayMapperPolls | OverlayMapperTTS | OverlayMapperInterface | OverlayMapperOBSWebsocket | OverlayMapperClipsCarousel | OverlayMapperHypeTrain;
+export type OverlayMappers = OverlayMapperURL | OverlayMapperChat | OverlayMapperReference | OverlayMapperAlertsRegistry | OverlayMapperCarousel | OverlayMapperMarathon | OverlayMapperStopwatch | OverlayMapperCountdown | OverlayMapperGroup | OverlayMapperEventlist | OverlayMapperEmotesCombo | OverlayMapperCredits | OverlayMapperClips | OverlayMapperAlerts | OverlayMapperEmotes | OverlayMapperEmotesExplode | OverlayMapperEmotesFireworks | OverlayMapperPolls | OverlayMapperTTS | OverlayMapperInterface | OverlayMapperOBSWebsocket | OverlayMapperClipsCarousel | OverlayMapperHypeTrain;
 
 export const OverlayMapper = new EntitySchema<Readonly<Required<OverlayMappers>>>({
   name:    'overlay_mapper',

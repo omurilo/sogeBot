@@ -1,0 +1,5 @@
+{
+  "isNotEmpty": "This field is required.",
+  "isCommand": "$property must start with !",
+  "isCommandOrCustomVariable": "$property must start with ! or $_"
+}

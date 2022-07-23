@@ -1,12 +1,14 @@
 import axios from 'axios';
 
 import { timer } from '../decorators';
+import { badgesCache } from '../services/twitch/calls/getChannelChatBadges';
 import Widget from './_interface';
 
 import { onMessage } from '~/decorators/on';
 import { getUserSender } from '~/helpers/commons';
 import { sendMessage } from '~/helpers/commons/sendMessage';
 import { ioServer } from '~/helpers/panel';
+import { parseTextWithEmotes } from '~/helpers/parseTextWithEmotes';
 import { adminEndpoint, publicEndpoint } from '~/helpers/socket';
 import { getIgnoreList } from '~/helpers/user/isIgnored';
 import { variables } from '~/watchers';
@@ -14,31 +16,40 @@ import { variables } from '~/watchers';
 class Chat extends Widget {
   @timer()
   async withEmotes (text: string | undefined) {
-    const Emotes = (await import('../emotes')).default;
-    if (typeof text === 'undefined' || text.length === 0) {
-      return '';
-    }
-
-    // checking emotes
-    for (const emote of Emotes.cache) {
-      const split: string[] = (text as string).split(' ');
-      for (let i = 0; i < split.length; i++) {
-        if (split[i] === emote.code) {
-          split[i] = `<span class="simpleChatImage"><img src='${emote.urls[1]}' class="emote" alt="${emote.code}" title="${emote.code}"/></span>`;
-        }
-      }
-      text = split.join(' ');
-    }
-    return text;
+    return parseTextWithEmotes(text);
   }
 
   @onMessage()
   message(message: onEventMessage) {
     this.withEmotes(message.message).then(data => {
+      if (!message.sender) {
+        return;
+      }
+      const badgeImages: {url: string, title: string }[] = [];
+      for (const messageBadgeId of message.sender.badges.keys()) {
+        const badge = badgesCache.find(o => o.id === messageBadgeId);
+        if (badge) {
+          const badgeImage = badge.getVersion(message.sender.badges.get(messageBadgeId) as string)?.getImageUrl(1);
+          if (badgeImage) {
+            let title = '';
+
+            const badgeInfo = message.sender.badgeInfo.get(badge.id);
+            if (badge.id === 'subscriber') {
+              title = `${badgeInfo}-Month Subscriber`;
+            } else if (badge.id === 'broadcaster') {
+              title = 'Broadcaster';
+            } else if (badgeInfo) {
+              title = `${badgeInfo}`;
+            }
+            badgeImages.push({ url: badgeImage, title });
+          }
+        }
+      }
       ioServer?.of('/widgets/chat').emit('message', {
         timestamp: message.timestamp,
         username:  message.sender.displayName.toLowerCase() === message.sender.userName ? message.sender.displayName : `${message.sender.displayName} (${message.sender.userName})`,
         message:   data,
+        badges:    badgeImages,
       });
     });
   }

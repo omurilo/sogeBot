@@ -2,16 +2,16 @@ import type { AlertInterface, EmitData } from '@entity/alert';
 import type { BetsInterface } from '@entity/bets';
 import type { CacheTitlesInterface } from '@entity/cacheTitles';
 import type { ChecklistInterface } from '@entity/checklist';
-import type { CommandsCountInterface, CommandsInterface } from '@entity/commands';
+import type { CommandsCountInterface, CommandsGroupInterface, CommandsInterface } from '@entity/commands';
 import type { CooldownInterface } from '@entity/cooldown';
 import type { EventInterface, Events } from '@entity/event';
 import type { EventListInterface } from '@entity/eventList';
 import type { GalleryInterface } from '@entity/gallery';
 import type { HighlightInterface } from '@entity/highlight';
 import type { HowLongToBeatGameInterface, HowLongToBeatGameItemInterface } from '@entity/howLongToBeatGame';
-import type { KeywordInterface } from '@entity/keyword';
+import type { KeywordGroupInterface, KeywordInterface } from '@entity/keyword';
 import type { OBSWebsocketInterface } from '@entity/obswebsocket';
-import type { OverlayMapperMarathon } from '@entity/overlay';
+import type { OverlayMapperMarathon, OverlayMappers } from '@entity/overlay';
 import type { PermissionsInterface } from '@entity/permissions';
 import type { PollInterface } from '@entity/poll';
 import type { PriceInterface } from '@entity/price';
@@ -20,8 +20,7 @@ import type { QuotesInterface } from '@entity/quotes';
 import type { RaffleInterface } from '@entity/raffle';
 import type { RandomizerInterface } from '@entity/randomizer';
 import type { RankInterface } from '@entity/rank';
-import type { SongRequestInterface } from '@entity/song';
-import type { currentSongType, SongBanInterface, SongPlaylistInterface } from '@entity/song';
+import type { currentSongType, SongBanInterface, SongPlaylistInterface, SongRequestInterface } from '@entity/song';
 import type { SpotifySongBanInterface } from '@entity/spotify';
 import type { TextInterface } from '@entity/text';
 import type { TimerInterface } from '@entity/timer';
@@ -30,8 +29,16 @@ import type {
 } from '@entity/user';
 import type { VariableInterface, VariableWatchInterface } from '@entity/variable';
 import { HelixVideo } from '@twurple/api/lib';
+import { ValidationError } from 'class-validator';
 import { Socket } from 'socket.io';
 import { FindConditions } from 'typeorm';
+
+import { QuickActions } from '../../../src/database/entity/dashboard';
+import { WidgetCustomInterface, WidgetSocialInterface } from '../../../src/database/entity/widget';
+
+import { AliasGroup, Alias } from '~/database/entity/alias';
+import { Plugin } from '~/database/entity/plugins';
+import { MenuItem } from '~/helpers/panel';
 
 type Configuration = {
   [x:string]: Configuration | string;
@@ -69,11 +76,21 @@ type GenericEvents = {
 type generic<T extends Record<string, any>> = {
   getAll: (cb: (error: Error | string | null, items: Readonly<Required<T>>[]) => void) => void,
   getOne: (id: Required<T['id']>, cb: (error: Error | string | null, item?: Readonly<Required<T>>) => void) => void,
-  setById: (opts: { id: Required<T['id']>, item: Partial<T> }, cb: (error: Error | string | null, item?: Readonly<Required<T>> | null) => void) => void,
+  setById: (opts: { id: Required<T['id']>, item: Partial<T> }, cb: (error: ValidationError[] | Error | string | null, item?: Readonly<Required<T>> | null) => void) => void,
+  save: (item: Partial<T>, cb: (error: ValidationError[] | Error | string | null, item?: Readonly<Required<T>> | null) => void) => void,
   deleteById: (id: Required<T['id']>, cb: (error: Error | string | null) => void) => void;
+  validate: (item: Partial<T>, cb: (error: ValidationError[] | Error | string | null) => void) => void,
 };
 
 export type ClientToServerEventsWithNamespace = {
+  '/core/plugins': GenericEvents & {
+    'listeners': (cb: (listeners: Record<string, any>) => void) => void,
+    'generic::getOne': generic<Plugin>['getOne'],
+    'generic::getAll': generic<Plugin>['getAll'],
+    'generic::save': generic<Plugin>['save'],
+    'generic::deleteById': generic<Plugin>['deleteById'],
+    'generic::validate': generic<Plugin>['validate'],
+  },
   '/core/emotes': GenericEvents & {
     'testExplosion': (cb: (err: Error | string | null, data: null ) => void) => void,
     'testFireworks': (cb: (err: Error | string | null, data: null ) => void) => void,
@@ -116,6 +133,13 @@ export type ClientToServerEventsWithNamespace = {
     'getEvents': (opts: { ignore: any[], limit: number }, cb: (err: Error | string | null, data: EventListInterface[]) => void) => void,
     'eventlist::getUserEvents': (userId: string, cb: (err: Error | string | null, events: EventListInterface[]) => void) => void,
   },
+  '/registries/overlays': GenericEvents & {
+    'generic::getOne': generic<OverlayMappers>['getOne'],
+    'generic::getAll': generic<OverlayMappers>['getAll'],
+    'generic::deleteById': generic<OverlayMappers>['deleteById'],
+    'generic::save': generic<OverlayMappers>['save'],
+    'overlays::tick': (opts: {id: string, millis: number}) => void,
+  },
   '/overlays/gallery': GenericEvents & {
     'generic::getOne': generic<GalleryInterface>['getOne'],
     'generic::getAll': generic<GalleryInterface>['getAll'],
@@ -126,6 +150,10 @@ export type ClientToServerEventsWithNamespace = {
   '/overlays/media': GenericEvents & {
     'alert': (data: any) => void,
     'cache': (cacheLimit: number, cb: (err: Error | string | null, data: any) => void) => void,
+  },
+  '/overlays/chat': GenericEvents & {
+    'test': (data: { message: string; username: string }) => void,
+    'message': (data: { id: string, show: boolean; message: string; username: string }) => void,
   },
   '/overlays/texttospeech': GenericEvents & {
     'speak': (data: { text: string; highlight: boolean, service: 0 | 1, key: string }) => void,
@@ -178,6 +206,7 @@ export type ClientToServerEventsWithNamespace = {
   },
   '/registries/alerts': GenericEvents & {
     'isAlertUpdated': (data: { updatedAt: number; id: string }, cb: (err: Error | null, isUpdated: boolean, updatedAt: number) => void) => void,
+    'alerts::settings': (data: null | { areAlertsMuted: boolean; isSoundMuted: boolean; isTTSMuted: boolean; }, cb: (item: { areAlertsMuted: boolean; isSoundMuted: boolean; isTTSMuted: boolean; }) => void) => void,
     'alerts::save': (item: Required<AlertInterface>, cb: (error: Error | string | null, item: null | Required<AlertInterface>) => void) => void,
     'alerts::delete': (item: Required<AlertInterface>, cb: (error: Error | string | null) => void) => void,
     'test': (emit: EmitData) => void,
@@ -198,9 +227,11 @@ export type ClientToServerEventsWithNamespace = {
     'randomizer::startSpin': () => void,
     'randomizer::showById': (id: string, cb: (error: Error | string | null) => void) => void,
     'randomizer::getVisible': (cb: (error: Error | string | null, item: RandomizerInterface) => void) => void,
+    'generic::getAll': generic<RandomizerInterface>['getAll'],
   },
   '/core/permissions': GenericEvents & {
     'generic::deleteById': generic<PermissionsInterface>['deleteById'],
+    'generic::getAll': generic<PermissionsInterface>['getAll'],
     'permission::save': (data: Required<PermissionsInterface>[], cb?: (error: Error | string | null) => void) => void,
     'test.user': (opts: { pid: string, value: string, state: string }, cb: (error: Error | string | null, response?: { status: import('../helpers/permissions/check').checkReturnType | { access: 2 }, partial: import('../helpers/permissions/check').checkReturnType | { access: 2 }, state: string }) => void) => void,
   },
@@ -235,7 +266,6 @@ export type ClientToServerEventsWithNamespace = {
     'api.stats': (data: { code: number, remaining: number | string, data: string}) => void,
     'translations': (cb: (lang: Record<string, any>) => void) => void,
     'panel::stats': (cb: (data: Record<string, any>) => void) => void,
-    'panel::resetStatsState': () => void,
     'version': (cb: (version: string) => void) => void,
     'debug::get': (cb: (error: Error | string | null, debug: string) => void) => void,
     'debug::set': (debug: string, cb: (error: Error | string | null) => void) => void,
@@ -259,6 +289,15 @@ export type ClientToServerEventsWithNamespace = {
   },
   '/stats/tips': GenericEvents & {
     'generic::getAll': generic<UserTipInterface & { username: string }>['getAll'],
+  },
+  '/systems/alias': GenericEvents & {
+    'generic::getOne': generic<Alias>['getOne'],
+    'generic::groups::getAll': generic<AliasGroup>['getAll'],
+    'generic::groups::save': generic<AliasGroup>['save'],
+    'generic::getAll': generic<Alias>['getAll'],
+    'generic::save': generic<Alias>['save'],
+    'generic::validate': generic<Alias>['validate'],
+    'generic::deleteById': generic<Alias>['deleteById'],
   },
   '/systems/bets': GenericEvents & {
     'bets::getCurrentBet': (cb: (error: Error | string | null, item?: BetsInterface) => void) => void,
@@ -322,12 +361,16 @@ export type ClientToServerEventsWithNamespace = {
     'generic::getOne': (id: string, cb: (error: Error | string | null, item?: Readonly<Required<CommandsInterface>> | null, count?: number) => void) => void,
     'generic::deleteById': generic<CommandsInterface>['deleteById'],
     'generic::setById': generic<CommandsInterface>['setById'],
+    'generic::groups::getAll': generic<CommandsGroupInterface>['getAll'],
+    'generic::groups::save': generic<CommandsGroupInterface>['save'],
   },
   '/systems/keywords': GenericEvents & {
     'generic::getAll': generic<KeywordInterface>['getAll'],
     'generic::getOne': generic<KeywordInterface>['getOne'],
     'generic::deleteById': generic<KeywordInterface>['deleteById'],
     'generic::setById': generic<KeywordInterface>['setById'],
+    'generic::groups::getAll': generic<KeywordGroupInterface>['getAll'],
+    'generic::groups::save': generic<KeywordGroupInterface>['save'],
   },
   '/systems/levels': GenericEvents & {
     'getLevelsExample': (cb: (error: Error | string | null, levels: string[]) => void) => void,
@@ -429,6 +472,20 @@ export type ClientToServerEventsWithNamespace = {
     'update': (cb: (values: any) => void) => void,
     'askForGet': (cb: () => void) => void,
   },
+  '/widgets/custom': GenericEvents & {
+    'generic::getAll': (userId: string, cb: (error: Error | string | null, items: Readonly<Required<WidgetCustomInterface>>[]) => void) => void,
+    'generic::save': generic<WidgetCustomInterface>['save'];
+    'generic::deleteById': generic<WidgetCustomInterface>['deleteById'];
+  },
+  '/widgets/quickaction': GenericEvents & {
+    'generic::deleteById': generic<QuickActions>['deleteById'],
+    'generic::save': generic<QuickActions>['save'],
+    'generic::getAll': (userId: string, cb: (error: Error | string | null, items: Readonly<Required<QuickActions>>[]) => void) => void,
+    'trigger': (data: { user: { userId: string, userName: string }, id: string, value?: any}) => void,
+  },
+  '/widgets/social': GenericEvents & {
+    'generic::getAll': generic<WidgetSocialInterface>['getAll'];
+  },
   '/core/events': GenericEvents & {
     'events::getRedeemedRewards': (cb: (error: Error | string | null, rewards: { id: string, name: string }[]) => void) => void,
     'generic::getAll': (cb: (error: Error | string | null, data: EventInterface[]) => void) => void,
@@ -467,6 +524,7 @@ export type ClientToServerEventsWithNamespace = {
     'logout': (data: { accessToken: string | null, refreshToken: string | null }) => void
   },
   '/core/general': GenericEvents & {
+    'menu::private': (cb: (items: (MenuItem & { enabled: boolean })[]) => void) => void,
     'generic::getCoreCommands': (cb: (error: Error | string | null, commands: import('../general').Command[]) => void) => void,
     'generic::setCoreCommand': (commands: import('../general').Command, cb: (error: Error | string | null) => void) => void,
   },

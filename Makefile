@@ -1,7 +1,9 @@
-PATH         := node_modules/.bin:$(PATH)
-SHELL        := /bin/bash
-VERSION      := `node -pe "require('./package.json').version"`
-ENV          ?= production
+PATH             := node_modules/.bin:$(PATH)
+SHELL            := /bin/bash
+VERSION          := `node -pe "require('./package.json').version"`
+ENV              ?= production
+NODE_MODULES_DIR ?= ../node_modules
+
 
 all : info clean dependencies bot
 .PHONY : all
@@ -14,20 +16,14 @@ info:
 dependencies:
 	@echo -ne "\n\t ----- Cleaning up dependencies\n"
 	@rm -rf node_modules
+	@rm -rf ${NODE_MODULES_DIR}
 	@echo -ne "\n\t ----- Installation of dependencies\n"
-ifeq ($(ENV),production)
-	npm ci --also=dev
-else
-	npm cache clean --force
-	rm package-lock.json || true
-	npm install --also=dev
-	sed -i 's/git+ssh/git+https/g' package-lock.json
-endif
+	NODE_ENV=development npm install
 	@echo -ne "\n\t ----- Installation of husky\n"
-	npx husky install
+	npx --yes husky install
 	@echo -ne "\n\t ----- Going through node_modules patches\n"
 	# How to create node_modules patch: https://opensource.christmas/2019/4
-	patch --forward node_modules/obs-websocket-js/types/index.d.ts < patches/obswebsocketTypeExpose.patch
+	patch --forward ${NODE_MODULES_DIR}/obs-websocket-js/types/index.d.ts < patches/obswebsocketTypeExpose.patch
 
 eslint:
 	@echo -ne "\n\t ----- Checking eslint\n"
@@ -52,7 +48,7 @@ pack:
 	@echo -ne "\n\t ----- Packing into sogeBot-$(VERSION).zip\n"
 	@cp ./src/data/.env* ./
 	@cp ./src/data/.env.sqlite ./.env
-	@npx bestzip sogeBot-$(VERSION).zip .npmrc .env* package-lock.json patches/ dest/ locales/ LICENSE package.json docs/ AUTHORS tools/ bin/ bat/ fonts.json assets/ favicon.ico
+	@npx --yes bestzip sogeBot-$(VERSION).zip .env* package-lock.json patches/ dest/ locales/ LICENSE package.json docs/ AUTHORS tools/ bin/ bat/ fonts.json assets/ favicon.ico
 
 prepare:
 	@echo -ne "\n\t ----- Cleaning up node_modules\n"

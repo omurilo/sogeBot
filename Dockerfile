@@ -18,7 +18,7 @@ WORKDIR /app
 RUN npm install -g npm@latest
 
 # Install dependencies
-RUN make
+RUN NODE_MODULES_DIR=./node_modules make
 # Remove dev dependencies (not needed anymore)
 RUN npm prune --production
 # Get latest ui dependencies in time of build
