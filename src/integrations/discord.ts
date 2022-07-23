@@ -1,43 +1,10 @@
-import { AppDataSource } from '~/database';
-import { isStreamOnline, stats } from '~/helpers/api';
-import { attributesReplace } from '~/helpers/attributesReplace';
-import {
-  announceTypes, getOwner, getUserSender, isUUID, prepare,
-} from '~/helpers/commons';
-import { isBotStarted, isDbConnected } from '~/helpers/database';
-import { debounce } from '~/helpers/debounce';
-
 import { DiscordLink } from '@entity/discord';
-
-import { eventEmitter } from '~/helpers/events';
-
 import { Events } from '@entity/event';
-
-import {
-  chatIn, chatOut, debug, error, info, warning, whisperOut,
-} from '~/helpers/log';
-
 import { Permissions as PermissionsEntity } from '@entity/permissions';
-
-import { check } from '~/helpers/permissions/check';
-
 import { User } from '@entity/user';
-
-import { get as getPermission } from '~/helpers/permissions/get';
-
 import { HOUR, MINUTE } from '@sogebot/ui-helpers/constants';
-
-import { adminEndpoint } from '~/helpers/socket';
-
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
-
-import * as changelog from '~/helpers/user/changelog.js';
-
 import chalk from 'chalk';
-
-import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
-import { variables } from '~/watchers';
-
 import * as DiscordJs from 'discord.js';
 import { ChannelType, GatewayIntentBits } from 'discord.js';
 import { get } from 'lodash';
@@ -53,9 +20,29 @@ import {
 } from '../decorators/on';
 import events from '../events';
 import Expects from '../expects';
+import { isModerator } from '../helpers/user';
 import { Message } from '../message';
 import Parser from '../parser';
 import users from '../users';
+
+import { AppDataSource } from '~/database';
+import { isStreamOnline, stats } from '~/helpers/api';
+import { attributesReplace } from '~/helpers/attributesReplace';
+import {
+  announceTypes, getOwner, getUserSender, isUUID, prepare,
+} from '~/helpers/commons';
+import { isBotStarted, isDbConnected } from '~/helpers/database';
+import { debounce } from '~/helpers/debounce';
+import { eventEmitter } from '~/helpers/events';
+import {
+  chatIn, chatOut, debug, error, info, warning, whisperOut,
+} from '~/helpers/log';
+import { check } from '~/helpers/permissions/check';
+import { get as getPermission } from '~/helpers/permissions/get';
+import { adminEndpoint } from '~/helpers/socket';
+import * as changelog from '~/helpers/user/changelog.js';
+import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
+import { variables } from '~/watchers';
 
 class Discord extends Integration {
   client: DiscordJs.Client | null = null;
@@ -330,6 +317,49 @@ class Discord extends Integration {
     }
   }
 
+  @command('!live-ban')
+  @command('!ban')
+  async banUser(opts: CommandOptions) {
+    try {
+      // TODO: ban user by reason
+      const { username, reason } = this.extractUsernameAndReasonFromMsg(opts);
+      info(opts.sender);
+      if (!isModerator(opts.sender)) {
+        return [
+          { response: prepare('permissions.without-permission', { command: this.getCommand('!ban') }), ...opts },
+        ];
+      }
+
+      eventEmitter.emit('ban', {
+        userName: username,
+        reason:   reason || '<no reason>',
+      });
+
+      const embed = new DiscordJs.MessageEmbed({
+        color:       'DARK_RED',
+        description: 'Essa é uma mensagem de teste do ban do Maic',
+        title:       'Usuário banido na live',
+        fields:      [{ name: 'username', value: username }, { name: 'motivo', value: reason }],
+        footer:      {
+          text: 'Esse já era ou alguém é contra?',
+        },
+      });
+
+      const message = await opts.discord?.channel.send({ embeds: [embed] });
+
+      if (message) {
+        this.embedMessageId = message.id;
+      }
+      chatOut(`#${opts.discord?.channel.name}: [[user banned on live]] [${username}]`);
+    } catch (e: any) {
+      if (e.message.includes('Expected parameter') || e.message.includes('<username>')) {
+        return [
+          { response: prepare('integrations.discord.ban-help-message', { sender: opts.sender, command: this.getCommand('!ban') }), ...opts },
+        ];
+      }
+    }
+  }
+
   @onStreamEnd()
   async updateStreamStartAnnounce() {
     this.changeClientOnlinePresence();
@@ -352,6 +382,13 @@ class Discord extends Integration {
       }
     }
     this.embedMessageId = '';
+  }
+
+  extractUsernameAndReasonFromMsg(opts: any) {
+    const [username] = new Expects(opts.parameters).username({ prefix: 'username:', optional: false }).toArray();
+    const [reason] = new Expects(opts.parameters).reason({ prefix: 'reason:', optional: true }).toArray();
+
+    return { username, reason };
   }
 
   filterFields(o: string, isOnline: boolean) {
@@ -695,7 +732,7 @@ class Discord extends Integration {
       }
     } catch (e: any) {
       const message = prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') });
-      if (msg) {
+      if (msg && !msg.content.startsWith('!')) {
         const reply = await msg.reply(message);
         chatOut(`#${channel.name}: @${author.tag}, ${message} [${author.tag}]`);
         if (this.deleteMessagesAfterWhile) {

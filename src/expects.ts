@@ -113,6 +113,13 @@ class Expects {
                 + (param.opts.optional ? ']' : ''),
               );
               break;
+            case 'reason':
+              expectedParameters.push(
+                (param.opts.optional ? '[' : '')
+                + `<reason>`
+                + (param.opts.optional ? ']' : ''),
+              );
+              break;
             case 'argument':
               expectedParameters.push(
                 (param.opts.optional ? '[' : '')
@@ -440,7 +447,7 @@ class Expects {
       this.checkText();
     }
 
-    const regexp = XRegExp(`@?(?<username>[A-Za-z0-9_]+)`, 'ix');
+    const regexp = XRegExp(`${opts.prefix ?? ''}@?(?<username>[A-Za-z0-9_]+)`, 'ix');
     const match = XRegExp.exec(`${this.text}`, regexp);
     if (match && match.groups) {
       this.match.push(match.groups.username.toLowerCase());
@@ -608,6 +615,34 @@ class Expects {
         throw new ParameterError('List not found');
       } else {
         this.match.push([]);
+      }
+    }
+    return this;
+  }
+
+  reason (opts?: any) {
+    opts = opts || {};
+    defaults(opts, {
+      exec: false, optional: false, default: null,
+    });
+    if (!opts.exec) {
+      this.toExec.push({ fnc: 'reason', opts });
+      return this;
+    }
+    if (!opts.optional) {
+      this.checkText();
+    }
+
+    const regexp = XRegExp(`${opts.prefix ?? ''}(?<reason>.+)`, 'ix');
+    const match = XRegExp.exec(`${this.text}`, regexp);
+    if (match && match.groups) {
+      this.match.push(match.groups.reason.toLowerCase());
+      this.text = this.text.replace(match.groups.reason, ''); // remove from text matched pattern
+    } else {
+      if (!opts.optional) {
+        throw new ParameterError('Reason not found');
+      } else {
+        this.match.push(opts.default);
       }
     }
     return this;
