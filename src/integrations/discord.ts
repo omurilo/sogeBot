@@ -341,14 +341,14 @@ class Discord extends Integration {
 
       const embed = new DiscordJs.MessageEmbed({
         color: opts.discord?.author.accentColor || 'DARK_RED',
-        description: `${opts.sender} baniu um usuário na live`,
+        description: `${opts.sender.displayName} baniu um usuário na live`,
         title: 'Usuário banido na live',
         fields: [{ name: 'Nome de usuário', value: username }, { name: 'Motivo', value: reason }],
         footer: {
           text: 'Esse já era ou alguém é contra?'
         },
         author: {
-          name: opts.sender.displayName,
+          name: opts.discord?.author.tag,
           icon_url: opts.discord?.author.avatarURL() || ''
         },
         timestamp: new Date(),
