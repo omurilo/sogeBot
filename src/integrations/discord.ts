@@ -391,8 +391,8 @@ class Discord extends Integration {
   }
 
   extractUsernameAndReasonFromMsg(opts: any) {
-    const [username] = new Expects(opts.parameters).username({ prefix: 'username:', optional: false }).toArray();
-    const [reason] = new Expects(opts.parameters).reason({ prefix: 'reason:', optional: true }).toArray();
+    const [username] = new Expects(opts.parameters).username({ prefix: 'username:\s*', optional: false }).toArray()
+    const [reason] = new Expects(opts.parameters).reason({ prefix: 'reason:\s*', optional: true }).toArray()
 
     return { username, reason };
   }
