@@ -10,7 +10,7 @@ services:
       - ./shared:/app/shared/
       - ./logs:/app/logs/
     ports:
-      - 20000:20000 # change your output port
+      - 20000:80 # change your output port
       #- 9229:9229 # uncomment to use --inspect port
     env_file:
       - ./.env
