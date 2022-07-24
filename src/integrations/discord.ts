@@ -1,7 +1,7 @@
 import { DiscordLink } from '@entity/discord';
 import { Events } from '@entity/event';
 import { Permissions as PermissionsEntity } from '@entity/permissions';
-import { User } from '@entity/user';
+import { User, UserInterface } from '@entity/user';
 import { HOUR, MINUTE } from '@sogebot/ui-helpers/constants';
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
 import chalk from 'chalk';
@@ -297,7 +297,7 @@ class Discord extends Integration {
 
   @command('!live-ban')
   @command('!ban')
-  async banUser(opts: CommandOptions) {
+  async commandBanUser(opts: CommandOptions) {
     try {
       // TODO: ban user by reason
       const { username, reason } = this.extractUsernameAndReasonFromMsg(opts)
@@ -309,31 +309,7 @@ class Discord extends Integration {
         ];
       }
 
-      tmiEmitter.emit('ban', username);
-      eventEmitter.emit('ban', {
-        userName: username,
-        reason: reason || '<no reason>'
-      });
-
-      const embed = new DiscordJs.MessageEmbed({
-        color: opts.discord?.author.accentColor || 'DARK_RED',
-        description: `${opts.sender.displayName} baniu um usuário na live`,
-        title: 'Usuário banido na live',
-        fields: [{ name: 'Nome de usuário', value: username }, { name: 'Motivo', value: reason }],
-        footer: {
-          text: 'Esse já era ou alguém é contra?'
-        },
-        author: {
-          name: opts.discord?.author.tag,
-          icon_url: opts.discord?.author.avatarURL() || ''
-        },
-        timestamp: new Date(),
-      });
-
-      const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.general)
-
-      await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
-      chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
+      return this.banUser(username, opts.discord?.author as DiscordJs.User, user, reason)
     } catch (e: any) {
       if (e.message.includes('Expected parameter')) {
         return [
@@ -375,6 +351,34 @@ class Discord extends Integration {
     const [reason] = new Expects(opts.parameters).reason({ prefix: 'reason:\s*', optional: true }).toArray()
 
     return { username, reason }
+  }
+
+  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string) {
+    tmiEmitter.emit('ban', username);
+    eventEmitter.emit('ban', {
+      userName: username,
+      reason: reason || '<no reason>'
+    });
+
+    const embed = new DiscordJs.MessageEmbed({
+      color: author.accentColor || 'DARK_RED',
+      description: `${user.userName} baniu um usuário na live`,
+      title: 'Usuário banido na live',
+      fields: [{ name: 'Nome de usuário', value: username }, { name: 'Motivo', value: reason || '' }],
+      footer: {
+        text: 'Esse já era ou alguém é contra?'
+      },
+      author: {
+        name: author.tag,
+        icon_url: author.avatarURL() || ''
+      },
+      timestamp: new Date(),
+    });
+
+    const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.general)
+
+    await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
+    chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
   }
 
   filterFields(o: string) {
@@ -564,11 +568,80 @@ class Discord extends Integration {
       });
       this.client.on('ready', () => {
         if (this.client) {
-          info(chalk.yellow('DISCORD: ') + `Logged in as ${get(this.client, 'user.tag', 'unknown')}!`);
+          info(
+            chalk.yellow("DISCORD: ") +
+              `Logged in as ${get(this.client, "user.tag", "unknown")}!`
+          );
           this.changeClientOnlinePresence();
           this.updateRolesOfLinkedUsers();
+          const guild = this.client.guilds.cache.get(this.guild);
+
+          let commands;
+
+          if (guild) {
+            commands = guild.commands;
+          } else {
+            commands = this.client.application?.commands;
+          }
+
+          commands?.create({ name: "ping", description: "Respond with pong" });
+          commands?.create({
+            name: "ban",
+            description: "Banir um usuário na live",
+            options: [
+              {
+                name: "username",
+                description: "Nome do usuário da twitch",
+                required: true,
+                type: 'STRING'
+              },
+              {
+                name: "reason",
+                description: "Motivo do banimento (opcional)",
+                required: false,
+                type: 'STRING'
+              },
+            ],
+          });
         }
       });
+
+      this.client.on("interactionCreate", async (interaction) => {
+        if (!interaction.isCommand()) {
+          return
+        }
+
+        const { commandName, options } = interaction
+
+        if (commandName === "ping") {
+          interaction.reply({
+            content: "pong",
+            ephemeral: true
+          })
+        } else if (commandName === 'ban') {
+          const username = options.getString('username');
+          const reason = options.getString('reason');
+
+          await interaction.deferReply({
+            ephemeral: true
+          });
+
+          const link = await getRepository(DiscordLink).findOneOrFail({ discordId: interaction.user.id, userId: Not(IsNull()) });
+          const user = await changelog.getOrFail(link.userId!);
+
+          if (!isModerator(user)) {
+            interaction.editReply({
+              content: prepare('permissions.without-permission', { command: '/ban' })
+            });
+          }
+
+          await this.banUser(username!, interaction.user, user, reason || undefined);
+
+          interaction.editReply({
+            content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!',
+          });
+        }
+      })
 
       this.client.on('messageCreate', async (msg) => {
         if (this.client && this.guild) {
