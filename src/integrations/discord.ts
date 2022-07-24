@@ -82,6 +82,7 @@ class Discord extends Integration {
       scrim:   '',
       songs:   '',
       timers:  '',
+      moderator: '',
     };
 
   @settings('bot')
@@ -375,7 +376,7 @@ class Discord extends Integration {
       timestamp: new Date(),
     });
 
-    const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.general)
+    const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator)
 
     await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
     chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
