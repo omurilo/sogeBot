@@ -17,7 +17,7 @@ services:
     environment:
       # ensure locale exists in container, you may need to install it
       LANG: pt_BR.UTF-8
-      #NODE_OPTIONS: --max_old_space_size=4096 # uncomment to set max 4GB RAM usage (default 2GB)
+      NODE_OPTIONS: --max_old_space_size=1024 # uncomment to set max 4GB RAM usage (default 2GB)
       #PROFILER: y # uncomment to enable --inspect
     depends_on:
       - db
