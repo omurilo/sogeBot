@@ -381,6 +381,10 @@ class Discord extends Integration {
       reason: reason || '<no reason>'
     });
 
+    this.announceBan(author, username, user, reason);
+  }
+
+  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string) {
     const embed = new DiscordJs.MessageEmbed({
       color: author.accentColor || 'DARK_RED',
       description: `${user.userName} baniu um usuário na live`,
@@ -646,27 +650,35 @@ class Discord extends Integration {
             ephemeral: true
           })
         } else if (commandName === 'ban') {
-          const username = options.getString('username');
-          const reason = options.getString('reason');
+          try {
+            const username = options.getString('username');
+            const reason = options.getString('reason');
 
-          await interaction.deferReply({
-            ephemeral: true
-          });
-
-          const link = await getRepository(DiscordLink).findOneOrFail({ discordId: interaction.user.id, userId: Not(IsNull()) });
-          const user = await changelog.getOrFail(link.userId!);
-
-          if (!isModerator(user)) {
-            interaction.editReply({
-              content: prepare('permissions.without-permission', { command: '/ban' })
+            await interaction.deferReply({
+              ephemeral: true
             });
+
+            const link = await getRepository(DiscordLink).findOneOrFail({ discordId: interaction.user.id, userId: Not(IsNull()) });
+            const user = await changelog.getOrFail(link.userId!);
+
+            if (!isModerator(user)) {
+              interaction.editReply({
+                content: prepare('permissions.without-permission', { command: '/ban' })
+              });
+            }
+
+            await this.banUser(username!, interaction.user, user, reason || undefined);
+
+            interaction.editReply({
+              content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!',
+            });
+          } catch (e: any) {
+            if (e.message.includes('Could not find any entity of type "discord_link" matching')) {
+              interaction.reply({
+                content: prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') })
+              })
+            }
           }
-
-          await this.banUser(username!, interaction.user, user, reason || undefined);
-
-          interaction.editReply({
-            content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!',
-          });
         }
       })
 
