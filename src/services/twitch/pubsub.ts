@@ -66,6 +66,7 @@ class PubSub {
             const [ userName, reason ] = message[rawDataSymbol].data.args;
             ban(`${userName}#${message[rawDataSymbol].data.args[0]} by ${createdBy}: ${reason ? reason : '<no reason>'}`);
             eventEmitter.emit('ban', { userName, reason: reason ? reason : '<no reason>' });
+            // TODO: receive message of user banned and send to discord bot
           } else if (message[rawDataSymbol].data.moderation_action === 'unban') {
             const [ userName ] = message[rawDataSymbol].data.args;
             unban(`${userName}#${(message[rawDataSymbol].data as any).target_user_id} by ${createdBy}`);
