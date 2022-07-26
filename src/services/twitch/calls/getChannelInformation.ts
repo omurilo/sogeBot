@@ -7,13 +7,16 @@ import {
 } from '~/helpers/api';
 import { parseTitle } from '~/helpers/api/parseTitle';
 import { getFunctionName } from '~/helpers/getFunctionName';
-import { error, info, warning } from '~/helpers/log';
+import { debug, error, info, isDebugEnabled, warning } from '~/helpers/log';
 import { setTitleAndGame } from '~/services/twitch/calls/setTitleAndGame';
 import { variables } from '~/watchers';
 
 let retries = 0;
 
 export async function getChannelInformation (opts: any) {
+  if (isDebugEnabled('api.calls')) {
+    debug('api.calls', new Error().stack);
+  }
   try {
     const broadcasterId = variables.get('services.twitch.broadcasterId') as string;
     const isTitleForced = variables.get('services.twitch.isTitleForced') as string;
@@ -41,9 +44,9 @@ export async function getChannelInformation (opts: any) {
           if (isTitleForced) {
             const game = gameCache.value;
             if ((process.env.NODE_ENV || 'development') !== 'production') {
-              info(`Title/game force enabled (but disabled in debug mode) => ${game} | ${_rawStatus}`);
+              info(`Title/category force enabled (but disabled in debug mode) => ${game} | ${_rawStatus}`);
             } else {
-              info(`Title/game force enabled => ${game} | ${_rawStatus}`);
+              info(`Title/category force enabled => ${game} | ${_rawStatus}`);
               setTitleAndGame({});
             }
             return { state: true, opts };
