@@ -6,6 +6,7 @@ import { HOUR, MINUTE } from '@sogebot/ui-helpers/constants';
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
 import chalk from 'chalk';
 import * as DiscordJs from 'discord.js';
+import { SlashCommandBuilder } from '@discordjs/builders'
 import { get } from 'lodash';
 import {
   getRepository, IsNull, LessThan, Not,
@@ -214,6 +215,7 @@ class Discord extends Integration {
             discordUser.roles.add(role).catch(roleError => {
               warning(`Cannot add role '${role.name}' to user ${user.userId}, check permission for bot (bot cannot set role above his own)`);
               warning(roleError);
+              debug('discord.roles', JSON.stringify(discordUser.roles.cache.values()))
             }).then(member => {
               debug('discord.roles', `User ${user.userId} have new role ${role.name}`);
             });
@@ -226,6 +228,7 @@ class Discord extends Integration {
             discordUser.roles.remove(role).catch(roleError => {
               warning('Cannot remove role to user, check permission for bot (bot cannot set role above his own)');
               warning(roleError);
+              debug('discord.roles', JSON.stringify(discordUser.roles.cache.values()))
             }).then(member => {
               debug('discord.roles', `User ${user.userId} have removed role ${role.name}`);
             });
@@ -354,18 +357,18 @@ class Discord extends Integration {
     return { username, reason }
   }
 
-  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string) {
+  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment) {
     tmiEmitter.emit('ban', username);
     eventEmitter.emit('ban', {
       userName: username,
       reason: reason || '<no reason>'
     });
 
-    this.announceBan(author, username, user, reason);
+    this.announceBan(author, username, user, reason, attachment);
   }
 
-  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string) {
-    const embed = new DiscordJs.MessageEmbed({
+  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment) {
+    const embedBody: DiscordJs.MessageEmbedOptions = {
       color: author.accentColor || 'DARK_RED',
       description: `${user.userName} baniu um usuário na live`,
       title: 'Usuário banido na live',
@@ -373,12 +376,19 @@ class Discord extends Integration {
       footer: {
         text: 'Esse já era ou alguém é contra?'
       },
+      thumbnail: {},
       author: {
         name: author.tag,
         icon_url: author.avatarURL() || ''
       },
       timestamp: new Date(),
-    });
+    }
+
+    if (attachment) {
+      embedBody["thumbnail"] = { url: attachment.url, proxyURL: attachment.proxyURL, height: attachment.height!, width: attachment.width! }
+    }
+
+    const embed = new DiscordJs.MessageEmbed(embedBody);
 
     const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator)
 
@@ -590,24 +600,13 @@ class Discord extends Integration {
           }
 
           commands?.create({ name: "ping", description: "Respond with pong" });
-          commands?.create({
-            name: "ban",
-            description: "Banir um usuário na live",
-            options: [
-              {
-                name: "username",
-                description: "Nome do usuário da twitch",
-                required: true,
-                type: 'STRING'
-              },
-              {
-                name: "reason",
-                description: "Motivo do banimento (opcional)",
-                required: false,
-                type: 'STRING'
-              },
-            ],
-          });
+
+          const banCommand = new SlashCommandBuilder().setName('ban').setDescription("Banir um usuário na live")
+          .addStringOption(option => option.setName("username").setDescription("Nome do usuário da twitch").setRequired(true))
+          .addStringOption(option => option.setName("reason").setDescription("Motivo do banimento (opcional)").setRequired(false))
+          .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
+          .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS)
+          commands?.create(banCommand.toJSON())
         }
       });
 
@@ -627,6 +626,7 @@ class Discord extends Integration {
           try {
             const username = options.getString('username');
             const reason = options.getString('reason');
+            const attachment = options.getAttachment('proof')
 
             await interaction.deferReply({
               ephemeral: true
@@ -641,7 +641,7 @@ class Discord extends Integration {
               });
             }
 
-            await this.banUser(username!, interaction.user, user, reason || undefined);
+            await this.banUser(username!, interaction.user, user, reason || undefined, attachment || undefined);
 
             interaction.editReply({
               content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!',
