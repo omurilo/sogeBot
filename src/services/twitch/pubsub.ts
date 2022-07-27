@@ -9,7 +9,7 @@ import { CustomAuthProvider } from './token/CustomAuthProvider.js';
 import { isStreamOnline } from '~/helpers/api';
 import { eventEmitter } from '~/helpers/events';
 import {
-  ban, error, info, redeem, timeout, unban, warning,
+  ban, error, info, redeem, timeout, unban, warning, debug
 } from '~/helpers/log';
 import * as changelog from '~/helpers/user/changelog.js';
 import eventlist from '~/overlays/eventlist';
@@ -66,14 +66,17 @@ class PubSub {
             const [ userName, reason ] = message[rawDataSymbol].data.args;
             ban(`${userName}#${message[rawDataSymbol].data.args[0]} by ${createdBy}: ${reason ? reason : '<no reason>'}`);
             eventEmitter.emit('ban', { userName, reason: reason ? reason : '<no reason>' });
+            debug('pubsub', message[rawDataSymbol].data)
             // TODO: receive message of user banned and send to discord bot
           } else if (message[rawDataSymbol].data.moderation_action === 'unban') {
             const [ userName ] = message[rawDataSymbol].data.args;
             unban(`${userName}#${(message[rawDataSymbol].data as any).target_user_id} by ${createdBy}`);
+            debug('pubsub', message[rawDataSymbol].data)
           } else if (message[rawDataSymbol].data.moderation_action === 'timeout') {
             const [ userName, reason ] = message[rawDataSymbol].data.args;
             timeout(`${userName}#${(message[rawDataSymbol].data as any).target_user_id} by ${createdBy} for ${reason} seconds`);
             eventEmitter.emit('timeout', { userName, duration: Number(reason) });
+            debug('pubsub', message[rawDataSymbol].data)
           } else if (message[rawDataSymbol].data.moderation_action === 'followersoff') {
             info(`${createdBy} disabled followers-only mode.`);
           } else if (message[rawDataSymbol].data.moderation_action === 'followers') {
