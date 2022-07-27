@@ -698,6 +698,38 @@ class Discord extends Integration {
               })
             }
           }
+        } else if (commandName === 'timeout') {
+          try {
+            const username = options.getString('username');
+            const duration = options.getNumber('duration');
+            const reason = options.getString('reason');
+            const attachment = options.getAttachment('proof');
+
+            await interaction.deferReply({
+              ephemeral: true
+            });
+
+            const link = await getRepository(DiscordLink).findOneOrFail({ discordId: interaction.user.id, userId: Not(IsNull()) });
+            const user = await changelog.getOrFail(link.userId!);
+
+            if (!isModerator(user)) {
+              interaction.editReply({
+                content: prepare('permissions.without-permission', { command: '/timeout' })
+              });
+            }
+
+            await this.timeoutUser(username!, duration!, interaction.user, user, reason || undefined, attachment || undefined);
+
+            interaction.editReply({
+              content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de timeouts!',
+            });
+          } catch (e: any) {
+            if (e.message.includes('Could not find any entity of type "discord_link" matching')) {
+              interaction.reply({
+                content: prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') })
+              })
+            }
+          }
         }
       })
 
