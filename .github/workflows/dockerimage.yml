@@ -43,7 +43,7 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
-          name: sogeBot-${{ steps.slug.outputs.SHA }}
+          name: luacomtio-bot-${{ steps.slug.outputs.sha8 }}
           path: ${{ github.workspace }}/*.zip
 
   build:
@@ -69,12 +69,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
-
-      - uses: actions/download-artifact@master
-        with:
-          name: sogeBot-${{ steps.slug.outputs.SHA }}
-          path: ${{ github.workspace }}/*.zip
-
       -
         name: Build and push
         uses: docker/build-push-action@v3
@@ -83,7 +77,4 @@ jobs:
           platforms: linux/amd64,linux/arm/v7,linux/arm64
           push: true
           tags: |
-            sogebot/nightly:latest
-            sogebot/nightly:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            omurilo/luacomtio-bot-nightly:latest
