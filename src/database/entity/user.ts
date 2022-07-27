@@ -59,7 +59,13 @@ export const User = new EntitySchema<Readonly<Required<UserInterface>>>({
     haveSubscribedAtLock: { type: Boolean, default: false },
     rank:                 { type: String, default: '' },
     haveCustomRank:       { type: Boolean, default: false },
-    subscribedAt:         {
+    followedAt:           {
+      type: 'varchar', length: '2022-07-27T00:30:34.569259834Z'.length, nullable: true,
+    },
+    followCheckAt: {
+      type: 'bigint', default: 0, transformer: new ColumnNumericTransformer(),
+    },
+    subscribedAt: {
       type: 'varchar', length: '2022-07-27T00:30:34.569259834Z'.length, nullable: true,
     },
     seenAt: {
