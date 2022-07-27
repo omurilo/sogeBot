@@ -417,6 +417,42 @@ class Discord extends Integration {
     chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
   }
 
+  async timeoutUser(username: string, seconds: number, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment) {
+    tmiEmitter.emit('timeout', username, seconds, isModerator(user));
+    eventEmitter.emit('timeout', { userName: username, duration: seconds });
+
+    await this.announceTimeout(author, username, user, seconds, reason, attachment);
+  }
+
+  async announceTimeout(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, duration: number, reason?: string, attachment?: DiscordJs.MessageAttachment) {
+    const embedBody: DiscordJs.MessageEmbedOptions = {
+      color: author.accentColor || 'DARK_ORANGE',
+      description: `${user.userName} deu um timeout de ${duration} segundos em um usuário na live`,
+      title: 'Usuário "timeoutado" na live',
+      fields: [{ name: 'Nome de usuário', value: username }, { name: 'Tempo', value: String(duration) }, { name: 'Motivo', value: reason || '' }],
+      footer: {
+        text: 'Daqui a pouco ele volta, né?!'
+      },
+      thumbnail: {},
+      author: {
+        name: author.tag,
+        icon_url: author.avatarURL() || ''
+      },
+      timestamp: new Date(),
+    }
+
+    if (attachment) {
+      embedBody["thumbnail"] = { url: attachment.url, proxyURL: attachment.proxyURL, height: attachment.height!, width: attachment.width! }
+    }
+
+    const embed = new DiscordJs.MessageEmbed(embedBody);
+
+    const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator)
+
+    await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
+    chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user timed out on live]] [${username}]`);
+  }
+
   filterFields(o: string, isOnline: boolean) {
     const broadcasterType = variables.get('services.twitch.broadcasterType') as string;
 
@@ -627,7 +663,16 @@ class Discord extends Integration {
           .addStringOption(option => option.setName("reason").setDescription("Motivo do banimento (opcional)").setRequired(false))
           .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
           .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS)
+
+          const timeoutCommand = new SlashCommandBuilder().setName('timeout').setDescription("Dar timeout em um usuário na live")
+          .addStringOption(option => option.setName("username").setDescription("Nome do usuário da twitch").setRequired(true))
+          .addNumberOption(option => option.setName("duration").setDescription("Duração do timeout (segundos)").setRequired(true))
+          .addStringOption(option => option.setName("reason").setDescription("Motivo do timeout (opcional)").setRequired(false))
+          .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
+          .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS | DiscordJs.Permissions.FLAGS.MUTE_MEMBERS)
+
           commands?.create(banCommand.toJSON())
+          commands?.create(timeoutCommand.toJSON())
         }
       });
 
