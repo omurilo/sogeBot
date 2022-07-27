@@ -47,10 +47,20 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          name: SOGEBOT ${{ github.ref_name }}
-          artifacts: "*.zip"
-          bodyFile: "body.md"
-          makeLatest: true
+          tag_name: ${{ github.ref }}
+          release_name: LUACOMTIO-BOT ${{ github.ref }}
+          body: |
+            ${{ steps.log.outputs.MESSAGE }}
+          draft: false
+          prerelease: false
+
+      - name: Upload the artifacts
+        uses: skx/github-action-publish-binaries@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ steps.create_release.outputs.id }}
+          args: '*.zip'
 
   build:
     needs: release
@@ -76,12 +86,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
-
-      - uses: actions/download-artifact@master
-        with:
-          name: sogeBot
-          path: ${{ github.workspace }}/*.zip
-
       -
         name: Build and push
         uses: docker/build-push-action@v3
@@ -90,7 +94,4 @@ jobs:
           platforms: linux/amd64,linux/arm/v7,linux/arm64
           push: true
           tags: |
-            sogebot/release:latest
-            sogebot/release:${{ steps.get_version.outputs.VERSION }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            omurilo/luacomtio-bot:latest
