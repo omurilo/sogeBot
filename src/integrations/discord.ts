@@ -666,7 +666,41 @@ class Discord extends Integration {
 
           const timeoutCommand = new SlashCommandBuilder().setName('timeout').setDescription("Dar timeout em um usuário na live")
           .addStringOption(option => option.setName("username").setDescription("Nome do usuário da twitch").setRequired(true))
-          .addNumberOption(option => option.setName("duration").setDescription("Duração do timeout (segundos)").setRequired(true))
+          .addNumberOption(option =>
+            option.setName("duration").setDescription("Duração do timeout (segundos)").setRequired(true).setChoices(
+              {
+                name: '15s',
+                value: 15,
+              }, {
+                name: '30s',
+                value: 30
+              }, {
+                name: '1 min',
+                value: 60
+              }, {
+                name: '5 min',
+                value: 60 * 5
+              }, {
+                name: '10 min',
+                value: 60 * 10
+              }, {
+                name: '15 min',
+                value: 60 * 15
+              }, {
+                name: '30 min',
+                value: 60 * 30
+              }, {
+                name: '1 hour',
+                value: 60 * 60
+              }, {
+                name: '12 hours',
+                value: 60 * 60 * 12
+              }, {
+                name: '1 Day',
+                value: 60 * 60 * 24
+              }
+            )
+          )
           .addStringOption(option => option.setName("reason").setDescription("Motivo do timeout (opcional)").setRequired(false))
           .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
           .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS | DiscordJs.Permissions.FLAGS.MUTE_MEMBERS)
