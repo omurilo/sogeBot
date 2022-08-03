@@ -38,7 +38,7 @@ class OBSWebsocket extends Integration {
   @ui({ type: 'selector', values: ['direct', 'overlay'] })
     accessBy: 'direct' | 'overlay' = 'overlay';
   @settings('connection')
-    address = 'wss://localhost:4455';
+    address = 'ws://localhost:4455';
   @settings('connection')
     password = '';
 
@@ -213,12 +213,11 @@ class OBSWebsocket extends Integration {
     adminEndpoint('/', 'integration::obswebsocket::generic::getAll', async (cb) => {
       cb(null, await getRepository(OBSWebsocketEntity).find());
     });
-    publicEndpoint('/', 'integration::obswebsocket::event', (opts) => {
-      const { type, location, ...data } = opts;
-      eventEmitter.emit(type, {
+    publicEndpoint(this.nsp, 'integration::obswebsocket::event', (opts) => {
+      eventEmitter.emit(opts.type, {
+        sceneName:  opts.sceneName,
         isDirect:   false,
         linkFilter: location,
-        ...data,
       });
     });
   }
