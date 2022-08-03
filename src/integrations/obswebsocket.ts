@@ -22,6 +22,28 @@ import { adminEndpoint, publicEndpoint } from '~/helpers/socket';
 import { translate } from '~/translate';
 
 class OBSWebsocket extends Integration {
+  reconnecting = false;
+  enableHeartBeat = false;
+
+  endpoint = v4();
+
+  @settings('connection')
+  @ui({ type: 'selector', values: ['direct', 'overlay'] })
+    accessBy: 'direct' | 'overlay' = 'overlay';
+  @settings('connection')
+    address = 'ws://localhost:4455';
+  @settings('connection')
+    password = '';
+
+  @onStartup()
+  @onChange('accessBy')
+  @onChange('address')
+  @onChange('password')
+  @onChange('enabled')
+  async onLoadAccessBy() {
+    this.initOBSWebsocket();
+  }
+
   @onStartup()
   addEvent() {
     if (typeof events === 'undefined') {
@@ -114,11 +136,11 @@ class OBSWebsocket extends Integration {
     adminEndpoint('/', 'integration::obswebsocket::generic::getAll', async (cb) => {
       cb(null, await AppDataSource.getRepository(OBSWebsocketEntity).find());
     });
-    publicEndpoint('/', 'integration::obswebsocket::event', (opts) => {
-      const { type, location, ...data } = opts;
-      eventEmitter.emit(type, {
+    publicEndpoint(this.nsp, 'integration::obswebsocket::event', (opts) => {
+      eventEmitter.emit(opts.type, {
+        sceneName:  opts.sceneName,
+        isDirect:   false,
         linkFilter: location,
-        ...data,
       });
     });
   }
