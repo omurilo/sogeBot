@@ -108,17 +108,18 @@ describe('Cooldowns - @func3 - check()', () => {
     });
 
     it('Add !cmd to cooldown', async () => {
-      const c = new Cooldown();
-      c.name =                 '!cmd';
-      c.miliseconds =          60000;
-      c.type =                 'global';
-      c.timestamp =            new Date(0).toISOString();
-      c.isErrorMsgQuiet =      true;
-      c.isEnabled =            true;
-      c.isOwnerAffected =      true;
-      c.isModeratorAffected =  true;
-      c.isSubscriberAffected = true;
-      await c.save();
+      await getRepository(Cooldown).save({
+        name:                 '!cmd',
+        miliseconds:          60000,
+        type:                 'global',
+        timestamp:            0,
+        lastTimestamp:        0,
+        isErrorMsgQuiet:      true,
+        isEnabled:            true,
+        isOwnerAffected:      true,
+        isModeratorAffected:  true,
+        isSubscriberAffected: true,
+      });
     });
 
     it('First user should PASS', async () => {
@@ -157,17 +158,18 @@ describe('Cooldowns - @func3 - check()', () => {
     });
 
     it('Add global KonCha to cooldown', async () => {
-      const c = new Cooldown();
-      c.name =                  'KonCha';
-      c.miliseconds =           60000;
-      c.type =                  'global';
-      c.timestamp =             new Date(0).toISOString();
-      c.isErrorMsgQuiet =       true;
-      c.isEnabled =             true;
-      c.isOwnerAffected =       true;
-      c.isModeratorAffected =   true;
-      c.isSubscriberAffected =  true;
-      await c.save();
+      await getRepository(Cooldown).save({
+        name:                 'KonCha',
+        miliseconds:          60000,
+        type:                 'global',
+        timestamp:            0,
+        lastTimestamp:        0,
+        isErrorMsgQuiet:      true,
+        isEnabled:            true,
+        isOwnerAffected:      true,
+        isModeratorAffected:  true,
+        isSubscriberAffected: true,
+      });
     });
 
     it('Add koncha to keywords', async () => {
@@ -216,17 +218,18 @@ describe('Cooldowns - @func3 - check()', () => {
     });
 
     it('Add global !followage to cooldown', async () => {
-      const c = new Cooldown();
-      c.name =                 '!followage';
-      c.miliseconds =          30000;
-      c.type =                 'global';
-      c.timestamp =            new Date(1544713598872).toISOString();
-      c.isErrorMsgQuiet =      true;
-      c.isEnabled =            true;
-      c.isOwnerAffected =      false;
-      c.isModeratorAffected =  false;
-      c.isSubscriberAffected = true;
-      await c.save();
+      await getRepository(Cooldown).save({
+        name:                 '!followage',
+        miliseconds:          30000,
+        type:                 'global',
+        timestamp:            1544713598872,
+        lastTimestamp:        0,
+        isErrorMsgQuiet:      true,
+        isEnabled:            true,
+        isOwnerAffected:      false,
+        isModeratorAffected:  false,
+        isSubscriberAffected: true,
+      });
     });
 
     it('First user should PASS', async () => {
@@ -259,6 +262,21 @@ describe('Cooldowns - @func3 - check()', () => {
 
       gamble.enabled = true;
       gamble.setCommand('!gamble', '!фортуна');
+      const c = await getRepository(Cooldown).save({
+        name:                 '!фортуна',
+        miliseconds:          200000,
+        type:                 'user',
+        timestamp:            1569490204420,
+        lastTimestamp:        0,
+        isErrorMsgQuiet:      false,
+        isEnabled:            true,
+        isOwnerAffected:      true,
+        isModeratorAffected:  true,
+        isSubscriberAffected: true,
+      });
+      await getRepository(CooldownViewer).insert({
+        ...c, userId: testUser.userId, timestamp: 10000, lastTimestamp: 0,
+      });
 
       const c = new Cooldown();
       c.name =                 '!фортуна';
