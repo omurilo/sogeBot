@@ -31,7 +31,7 @@ class OBSWebsocket extends Integration {
   @ui({ type: 'selector', values: ['direct', 'overlay'] })
     accessBy: 'direct' | 'overlay' = 'overlay';
   @settings('connection')
-    address = 'localhost:4455';
+    address = 'wss://localhost:4455';
   @settings('connection')
     password = '';
 
