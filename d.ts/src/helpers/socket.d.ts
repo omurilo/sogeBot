@@ -476,8 +476,8 @@ export type ClientToServerEventsWithNamespace = {
     'viewers::update': (data: [userId: string, update: Partial<UserInterface> & { tips?: UserTipInterface[], bits?: UserBitInterface[] }], cb: (error: Error | string | null) => void) => void,
     'viewers::remove': (userId: string, cb: (error: Error | string | null) => void) => void,
     'getNameById': (id: string, cb: (error: Error | string | null, user: string | null) => void) => void,
-    'viewers::findOneBy': (id: string, cb: (error: Error | string | null, viewer: ViewerReturnType) => void) => void
-    'find.viewers': (opts: { exactUsernameFromTwitch?: boolean, state: string, page?: number; perPage?: number; order?: { orderBy: string, sortOrder: 'ASC' | 'DESC' }, filter?: { columnName: string, operation: string, value: any }[], search?: string }, cb: (error: Error | string | null, viewers: any[], count: number, state: string | null) => void) => void,
+    'viewers::findOne': (id: string, cb: (error: Error | string | null, viewer: ViewerReturnType) => void) => void
+    'find.viewers': (opts: { exactUsernameFromTwitch?: boolean, state: string, page?: number; perPage?: number; order?: { orderBy: string, sortOrder: 'ASC' | 'DESC' }, filter?: { vips: boolean | null; subscribers: boolean | null; active: boolean | null; }, search?: string }, cb: (error: Error | string | null, viewers: any[], count: number, state: string | null) => void) => void,
     'logout': (data: { accessToken: string | null, refreshToken: string | null }) => void
   },
   '/core/general': GenericEvents & {
