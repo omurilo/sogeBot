@@ -378,7 +378,7 @@ class Discord extends Integration {
     return { username, reason }
   }
 
-  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment) {
+  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment | string) {
     tmiEmitter.emit('ban', username);
     eventEmitter.emit('ban', {
       userName: username,
@@ -388,7 +388,7 @@ class Discord extends Integration {
     this.announceBan(author, username, user, reason, attachment);
   }
 
-  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment) {
+  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment | string) {
     const embedBody: DiscordJs.MessageEmbedOptions = {
       color: author.accentColor || 'DARK_RED',
       description: `${user.userName} baniu um usuário na live`,
@@ -405,8 +405,12 @@ class Discord extends Integration {
       timestamp: new Date(),
     }
 
-    if (attachment) {
+    if (typeof attachment !== 'string' && attachment) {
       embedBody["thumbnail"] = { url: attachment.url, proxyURL: attachment.proxyURL, height: attachment.height!, width: attachment.width! }
+    }
+
+    if (typeof attachment === 'string') {
+      embedBody["thumbnail"] = { url: attachment }
     }
 
     const embed = new DiscordJs.MessageEmbed(embedBody);
@@ -705,84 +709,251 @@ class Discord extends Integration {
           .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
           .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS | DiscordJs.Permissions.FLAGS.MUTE_MEMBERS)
 
-          commands?.create(banCommand.toJSON())
-          commands?.create(timeoutCommand.toJSON())
+          const modalCommand = new SlashCommandBuilder().setName('ban-modal').setDescription("teste de abertura de modal")
+          .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
+          .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS | DiscordJs.Permissions.FLAGS.MUTE_MEMBERS)
+
+          commands?.create(banCommand.toJSON()).then(() => info(chalk.yellow("DISCORD: ") + 'ban slash command created'))
+          commands?.create(timeoutCommand.toJSON()).then(() => info(chalk.yellow("DISCORD: ") + 'timeout slash command created'))
+          commands?.create(modalCommand.toJSON()).then(() => info(chalk.yellow("DISCORD: ") + 'modal slash command created'))
         }
       });
 
       this.client.on("interactionCreate", async (interaction) => {
-        if (!interaction.isCommand()) {
-          return
+        if (interaction.isButton()) {
+          if (interaction.customId === 'ban-confirm') {
+            const username = new DiscordJs.TextInputComponent()
+            .setCustomId('username-input')
+            .setLabel('Nome do usuário na twitch')
+            .setStyle('SHORT')
+            .setPlaceholder('Nome do usuário sem "@"')
+            .setRequired(true);
+
+            const reason = new DiscordJs.TextInputComponent()
+            .setCustomId('reason-input')
+            .setLabel('Motivo do banimento')
+            .setStyle('PARAGRAPH')
+            .setPlaceholder('Eu quero banir o malandro porque ele estava fazendo tal coisa')
+            .setRequired(true);
+
+            const inputFileUrl = new DiscordJs.TextInputComponent()
+            .setCustomId('proof-image-input')
+            .setLabel('Url da imagem de prova do malandro')
+            .setStyle('SHORT')
+            .setValue(interaction.message.embeds[0].image?.url ?? '')
+            .setPlaceholder('Não precisa se não quiser')
+
+            const rows = [username, reason, inputFileUrl].map((component) => new DiscordJs.MessageActionRow<DiscordJs.ModalActionRowComponent>().addComponents(component))
+
+            const modal = new DiscordJs.Modal()
+              .setCustomId('ban-modal')
+              .setTitle('Informe os dados para o banimento')
+              .addComponents(...rows);
+
+            await interaction.showModal(modal);
+          }
         }
 
-        const { commandName, options } = interaction
+        if (interaction.isModalSubmit()) {
+          if (interaction.customId === 'ban-modal') {
+            try {
+              const username = interaction.fields.getTextInputValue('username-input');
+              const reason = interaction.fields.getTextInputValue('reason-input');
+              const proofUrl = interaction.fields.getTextInputValue('proof-image-input');
 
-        if (commandName === "ping") {
-          interaction.reply({
-            content: "pong",
-            ephemeral: true
-          })
-        } else if (commandName === 'ban') {
-          try {
-            const username = options.getString('username');
-            const reason = options.getString('reason');
-            const attachment = options.getAttachment('proof')
-
-            await interaction.deferReply({
-              ephemeral: true
-            });
-
-            const link = await getRepository(DiscordLink).findOneOrFail({ discordId: interaction.user.id, userId: Not(IsNull()) });
-            const user = await changelog.getOrFail(link.userId!);
-
-            if (!isModerator(user)) {
-              interaction.editReply({
-                content: prepare('permissions.without-permission', { command: '/ban' })
+              await interaction.deferReply({
+                ephemeral: true,
               });
-            }
 
-            await this.banUser(username!, interaction.user, user, reason || undefined, attachment || undefined);
+              const link = await getRepository(DiscordLink).findOneOrFail({
+                discordId: interaction.user.id,
+                userId: Not(IsNull()),
+              });
+              const user = await changelog.getOrFail(link.userId!);
 
-            interaction.editReply({
-              content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!',
-            });
-          } catch (e: any) {
-            if (e.message.includes('Could not find any entity of type "discord_link" matching')) {
-              interaction.reply({
-                content: prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') })
-              })
+              if (!isModerator(user)) {
+                interaction.editReply({
+                  content: prepare("permissions.without-permission", {
+                    command: "/ban-modal",
+                  }),
+                });
+              }
+
+              await this.banUser(
+                username!,
+                interaction.user,
+                user,
+                reason || undefined,
+                proofUrl || undefined
+              );
+
+              interaction.editReply({
+                content: "Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!",
+              });
+            } catch (e: any) {
+              if (
+                e.message.includes(
+                  'Could not find any entity of type "discord_link" matching'
+                )
+              ) {
+                interaction.reply({
+                  content: prepare(
+                    "integrations.discord.your-account-is-not-linked",
+                    { command: this.getCommand("!link") }
+                  ),
+                });
+              }
             }
           }
-        } else if (commandName === 'timeout') {
+        }
+
+        if (!interaction.isCommand()) {
+          return;
+        }
+
+        const { commandName, options } = interaction;
+
+        if (commandName === "ban-modal") {
+          await interaction.deferReply({ ephemeral: true })
+          const attachment = options.getAttachment("proof");
+          const row = new DiscordJs.MessageActionRow();
+
+          const confirmButton = new DiscordJs.MessageButton()
+          .setCustomId('ban-confirm')
+          .setStyle('SUCCESS')
+          .setLabel('Quero banir um malandro')
+
+          const denyButton = new DiscordJs.MessageButton()
+          .setCustomId('ban-cancel')
+          .setStyle('DANGER')
+          .setLabel('Eu fiz sem querer')
+
+          row.addComponents(confirmButton, denyButton)
+
+          const embed = new DiscordJs.MessageEmbed()
+            .setImage(attachment?.url ?? '')
+            .setTitle('Banimento de usuário')
+            .setDescription('Você vai banir um usuário? Então clica no botão ai embaixo e informa o nome do malandro pra nois!')
+
+          interaction.editReply({
+            components: [row],
+            embeds: [embed],
+          });
+
+          const collector = interaction.channel?.createMessageComponentCollector({ componentType: 'BUTTON', max: 1 });
+
+          collector?.on('end', async i => {
+            if (['ban-confirm', 'ban-cancel'].includes(i.first()?.customId || '')) {
+              row.components.map(b => b.setDisabled(true));
+              interaction.editReply({ embeds: [embed], components: [row] })
+            }
+          })
+
+        } else if (commandName === "ping") {
+          interaction.reply({
+            content: "Pong mermão",
+            ephemeral: true,
+          });
+        } else if (commandName === "ban") {
           try {
-            const username = options.getString('username');
-            const duration = options.getNumber('duration');
-            const reason = options.getString('reason');
-            const attachment = options.getAttachment('proof');
+            const username = options.getString("username");
+            const reason = options.getString("reason");
+            const attachment = options.getAttachment("proof");
 
             await interaction.deferReply({
-              ephemeral: true
+              ephemeral: true,
             });
 
-            const link = await getRepository(DiscordLink).findOneOrFail({ discordId: interaction.user.id, userId: Not(IsNull()) });
+            const link = await getRepository(DiscordLink).findOneOrFail({
+              discordId: interaction.user.id,
+              userId: Not(IsNull()),
+            });
             const user = await changelog.getOrFail(link.userId!);
 
             if (!isModerator(user)) {
               interaction.editReply({
-                content: prepare('permissions.without-permission', { command: '/timeout' })
+                content: prepare("permissions.without-permission", {
+                  command: "/ban",
+                }),
               });
             }
 
-            await this.timeoutUser(username!, duration!, interaction.user, user, reason || undefined, attachment || undefined);
+            await this.banUser(
+              username!,
+              interaction.user,
+              user,
+              reason || undefined,
+              attachment || undefined
+            );
 
             interaction.editReply({
-              content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de timeouts!',
+              content:
+                "Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos!",
             });
           } catch (e: any) {
-            if (e.message.includes('Could not find any entity of type "discord_link" matching')) {
+            if (
+              e.message.includes(
+                'Could not find any entity of type "discord_link" matching'
+              )
+            ) {
               interaction.reply({
-                content: prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') })
-              })
+                content: prepare(
+                  "integrations.discord.your-account-is-not-linked",
+                  { command: this.getCommand("!link") }
+                ),
+              });
+            }
+          }
+        } else if (commandName === "timeout") {
+          try {
+            const username = options.getString("username");
+            const duration = options.getNumber("duration");
+            const reason = options.getString("reason");
+            const attachment = options.getAttachment("proof");
+
+            await interaction.deferReply({
+              ephemeral: true,
+            });
+
+            const link = await getRepository(DiscordLink).findOneOrFail({
+              discordId: interaction.user.id,
+              userId: Not(IsNull()),
+            });
+            const user = await changelog.getOrFail(link.userId!);
+
+            if (!isModerator(user)) {
+              interaction.editReply({
+                content: prepare("permissions.without-permission", {
+                  command: "/timeout",
+                }),
+              });
+            }
+
+            await this.timeoutUser(
+              username!,
+              duration!,
+              interaction.user,
+              user,
+              reason || undefined,
+              attachment || undefined
+            );
+
+            interaction.editReply({
+              content:
+                "Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de timeouts!",
+            });
+          } catch (e: any) {
+            if (
+              e.message.includes(
+                'Could not find any entity of type "discord_link" matching'
+              )
+            ) {
+              interaction.reply({
+                content: prepare(
+                  "integrations.discord.your-account-is-not-linked",
+                  { command: this.getCommand("!link") }
+                ),
+              });
             }
           }
         }
