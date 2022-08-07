@@ -12,7 +12,7 @@ import { variables } from '~/watchers';
  *
  * announce('Lorem Ipsum Dolor', 'timers);
  */
-export const announceTypes = ['bets', 'duel', 'heist', 'timers', 'songs', 'scrim', 'raffles', 'polls', 'general'] as const;
+export const announceTypes = ['bets', 'duel', 'heist', 'timers', 'songs', 'scrim', 'raffles', 'polls', 'general', 'moderator'] as const;
 export async function announce(messageToAnnounce: string, type: typeof announceTypes[number], replaceCustomVariables = true) {
   const botUsername = variables.get('services.twitch.botUsername') as string;
   const botId = variables.get('services.twitch.botId') as string;

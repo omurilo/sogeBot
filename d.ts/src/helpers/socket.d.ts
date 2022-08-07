@@ -494,6 +494,7 @@ export type ClientToServerEventsWithNamespace = {
   },
   '/core/tts': GenericEvents & {
     'google::speak': (opts: { volume: number; pitch: number; rate: number; text: string; voice: string; }, cb: (error: Error | string | null, audioContent?: string | null) => void) => void,
+    'streamlabs::speak': (opts: { text: string; voice: string; }, cb: (error: Error | string | null, audioContent?: string | null) => void) => void,
     'speak': (opts: { text: string, key: string, voice: string; volume: number; rate: number; pitch: number; triggerTTSByHighlightedMessage?: boolean; }, cb: (error: Error | string | null, b64mp3: string) => void) => void,
   },
   '/core/ui': GenericEvents & {
