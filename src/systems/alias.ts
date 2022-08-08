@@ -56,10 +56,7 @@ class Alias extends System {
   sockets() {
     adminEndpoint('/systems/alias', 'generic::groups::deleteById', async (name, cb) => {
       try {
-        const group = await AliasGroup.findOneBy({ name });
-        if (!group) {
-          throw new Error(`Group ${name} not found`);
-        }
+        const group = await AliasGroup.findOneOrFail({ name });
         await group.remove();
         cb(null);
       } catch (e) {
