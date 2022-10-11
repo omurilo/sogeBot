@@ -89,49 +89,50 @@ class Updater extends Core {
         const [actualMajor, actualMinor, actualPatch] = execSync(`node -p "require('${pkg}/package.json').version"`).toString().replace('\n', '').split('.');
         execSync(`node -p "delete require.cache[require.resolve('${pkg}/package.json')]"`);
 
-          let applicableVersion = [actualMajor, actualMinor, actualPatch].join('.');
-          // we are assuming that except first number, we can update
-          // get latest applicable update
-          for (const version of versionsList) {
-            const [possibleMajor, possibleMinor, possiblePatch] = version.split('.');
-            if (possibleMajor === actualMajor) {
-              if (possibleMinor >= actualMinor || (possibleMinor === actualMinor && possiblePatch >= actualPatch)) {
-                applicableVersion = [possibleMajor, possibleMinor, possiblePatch].join('.');
-            }
-          } else {
-            continue;
+        let applicableVersion = [actualMajor, actualMinor, actualPatch].join('.');
+        // we are assuming that except first number, we can update
+        // get latest applicable update
+        for (const version of versionsList) {
+          const [possibleMajor, possibleMinor, possiblePatch] = version.split('.');
+          if (possibleMajor === actualMajor) {
+            if (possibleMinor >= actualMinor || (possibleMinor === actualMinor && possiblePatch >= actualPatch)) {
+              applicableVersion = [possibleMajor, possibleMinor, possiblePatch].join('.');
             }
           } else {
             continue;
           }
         }
 
-          if ([actualMajor, actualMinor, actualPatch].join('.') !== applicableVersion
-              && [actualMajor, actualMinor, actualPatch].join('.') !== this.versionsAvailable[pkg]) {
-            if (this.isAutomaticUpdateEnabled
-              && (!(global as any).mocha)) {
-              if (updating.has(pkg)) {
-                continue; // skip if update in progress
-              }
-              updating.add(pkg);
+        if ([actualMajor, actualMinor, actualPatch].join('.') !== applicableVersion
+            && [actualMajor, actualMinor, actualPatch].join('.') !== this.versionsAvailable[pkg]) {
+          if (this.isAutomaticUpdateEnabled
+            && (!(global as any).mocha)) {
+            if (updating.has(pkg)) {
+              continue; // skip if update in progress
+            }
+            updating.add(pkg);
 
-              info(`New version of ${pkg}@${applicableVersion} package found. Automatic update processing.`);
-              await new Promise((resolve) => {
-                exec(`npm install -s ${pkg}@${applicableVersion}`, (error, _, stderr) => {
-                  if (!error) {
-                    this.versions[pkg as keyof typeof versions] = applicableVersion;
-                    info(`${pkg}@${applicableVersion} updated succesfully!`);
-                  } else {
-                    errorLog(stderr);
-                  }
-                  updating.delete(pkg);
-                  resolve(true);
-              });
+            info(`New version of ${pkg}@${applicableVersion} package found. Automatic update processing.`);
+            await new Promise((resolve) => {
+              exec(`npm install -s ${pkg}@${applicableVersion}`, (error, _, stderr) => {
+                if (!error) {
+                  this.versions[pkg as keyof typeof versions] = applicableVersion;
+                  info(`${pkg}@${applicableVersion} updated succesfully!`);
+                } else {
+                  errorLog(stderr);
+                }
+                updating.delete(pkg);
+                resolve(true);
               });
             });
-          });
-        } else {
-          info(`New version of ${pkg}@${applicableVersion} package found. Automatic update disabled.`);
+          } else {
+            info(`New version of ${pkg}@${applicableVersion} package found. Automatic update disabled.`);
+          }
+        }
+        this.versionsAvailable[pkg] = applicableVersion;
+      } catch (e) {
+        if (!updating.has(pkg)) {
+          errorLog(e);
         }
       }
     }
