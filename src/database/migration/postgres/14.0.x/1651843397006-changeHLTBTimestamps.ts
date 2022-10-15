@@ -1,7 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-import { insertItemIntoTable } from '~/database/insertItemIntoTable';
-
 export class changeHLTBTimestamps1651843397006 implements MigrationInterface {
   name = 'changeHLTBTimestamps1651843397006';
 
@@ -20,16 +18,15 @@ export class changeHLTBTimestamps1651843397006 implements MigrationInterface {
 
     for (const item of games) {
       delete item.imageUrl;
-
-      item.startedAt = new Date(item.startedAt).toISOString();
+      item.startedAt = new Date(!isNaN(item.startedAt) ? Number(item.startedAt) : item.startedAt).toISOString();
       item.updatedAt = new Date().toISOString();
 
-      await insertItemIntoTable('how_long_to_beat_game', item, queryRunner);
+      await queryRunner.query(`INSERT INTO "how_long_to_beat_game" (${Object.keys(item).map(o => `"${o}"`).join(", ")}) values (${Object.values(item).map(o => (typeof o === "string" || typeof o === "object") ? `'${o}'` : o)})`);
     }
 
     for (const item of items) {
-      item.createdAt = new Date(item.createdAt).toISOString();
-      await insertItemIntoTable('how_long_to_beat_game_item', item, queryRunner);
+      item.createdAt = new Date(!isNaN(item.createdAt) ? Number(item.createdAt) : item.createdAt).toISOString();
+      await queryRunner.query(`INSERT INTO "how_long_to_beat_game_item" (${Object.keys(item).map(o => `"${o}"`).join(", ")}) values (${Object.values(item).map(o => (typeof o === "string" || typeof o === "object") ? `'${o}'` : o)})`);
     }
   }
 
