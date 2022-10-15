@@ -1,7 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-import { insertItemIntoTable } from '~/database/insertItemIntoTable';
-
 export class mergeHLTBCreatedAt1651843397007 implements MigrationInterface {
   name = 'mergeHLTBCreatedAt1651843397007';
 
@@ -12,14 +10,14 @@ export class mergeHLTBCreatedAt1651843397007 implements MigrationInterface {
     for(const item of items) {
       if (map.get(item.createdAt)) {
         const mapItem = map.get(item.createdAt);
-        item.timestamp += mapItem.timestamp;
+        item.timestamp = Number(item.timestamp) + Number(mapItem.timestamp);
       }
       map.set(item.createdAt, item);
     }
 
     await queryRunner.query(`DELETE FROM "how_long_to_beat_game_item" WHERE 1=1`);
     for(const item of map.values()) {
-      await insertItemIntoTable('how_long_to_beat_game_item', item, queryRunner);
+      await queryRunner.query(`INSERT INTO "how_long_to_beat_game_item" (${Object.keys(item).map(o => `"${o}"`).join(", ")}) values (${Object.values(item).map(o => (typeof o === "string" || typeof o === "object") ? `'${o}'` : o)})`);
     }
   }
 
