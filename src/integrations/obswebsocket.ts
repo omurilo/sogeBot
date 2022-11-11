@@ -136,11 +136,12 @@ class OBSWebsocket extends Integration {
     adminEndpoint('/', 'integration::obswebsocket::generic::getAll', async (cb) => {
       cb(null, await getRepository(OBSWebsocketEntity).find());
     });
-    publicEndpoint(this.nsp, 'integration::obswebsocket::event', (opts) => {
-      eventEmitter.emit(opts.type, {
-        sceneName:  opts.sceneName,
+    publicEndpoint('/', 'integration::obswebsocket::event', (opts) => {
+      const { type, location, ...data } = opts;
+      eventEmitter.emit(type, {
         isDirect:   false,
         linkFilter: location,
+        ...data,
       });
     });
   }
