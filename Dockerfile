@@ -27,12 +27,6 @@ RUN npm prune --production
 # Get latest ui dependencies in time of build
 RUN npm update @sogebot/ui-admin @sogebot/ui-overlay @sogebot/ui-helpers @sogebot/ui-oauth @sogebot/ui-public
 
-FROM node:16-bullseye-slim
-
-COPY --from=builder /app /app
-
-WORKDIR /app
-
 VOLUME "./logs" "/app/logs"
 
 # Expose API port to the outside
