@@ -1,4 +1,4 @@
-FROM node:18-bullseye-slim
+FROM node:18-bullseye-slim as builder
 
 ENV LAST_UPDATED 2022-11-09-1237
 
@@ -27,6 +27,12 @@ RUN chmod +x /docker.sh
 # Install packages and clean .npm cache (not needed)
 RUN npm ci && npm cache clean --force
 
+FROM node:18-bullseye-slim
+
+USER node
+
+COPY --chown=node:node --from=builder /app /app
+
 VOLUME "./logs" "/app/logs"
 
 # Expose API port to the outside
@@ -35,6 +41,6 @@ EXPOSE 20000
 EXPOSE 9229
 
 # Add startup script
-COPY docker.sh /app
+COPY --chown=node:node docker.sh /app
 RUN chmod +x /app/docker.sh
 ENTRYPOINT ["/app/docker.sh"]
