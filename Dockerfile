@@ -27,12 +27,6 @@ RUN chmod +x /docker.sh
 # Install packages and clean .npm cache (not needed)
 RUN npm ci && npm cache clean --force
 
-FROM node:16-bullseye-slim
-
-COPY --from=builder /app /app
-
-WORKDIR /app
-
 VOLUME "./logs" "/app/logs"
 
 # Expose API port to the outside

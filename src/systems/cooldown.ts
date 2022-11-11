@@ -150,7 +150,14 @@ class Cooldown extends System {
         isOwnerAffected:      false,
         isModeratorAffected:  false,
         isSubscriberAffected: true,
-      });
+      }, await CooldownEntity.findOne({
+        where: {
+          name,
+          type,
+        },
+      }));
+      await cooldownToSave.save();
+
       return [{
         response: prepare('cooldowns.cooldown-was-set', {
           seconds, type, command: name,
