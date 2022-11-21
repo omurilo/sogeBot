@@ -25,7 +25,7 @@ COPY docker.sh /
 RUN chmod +x /docker.sh
 
 # Install packages and clean .npm cache (not needed)
-RUN npm ci && npm cache clean --force
+RUN npm ci --omit=dev
 
 FROM node:18-bullseye-slim
 
