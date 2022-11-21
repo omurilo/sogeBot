@@ -28,10 +28,8 @@ WORKDIR /app
 COPY docker.sh /
 RUN chmod +x /docker.sh
 
-# Install packages (forcing to)
-RUN npm install --verbose --force
-# Clean .npm cache (not needed)
-RUN npm cache clean --force
+# Install packages and clean .npm cache (not needed)
+RUN npm ci --omit=dev
 
 FROM node:18-bullseye-slim
 
