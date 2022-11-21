@@ -19,16 +19,18 @@ export class timerAttrChange1661765436386 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "timer_response" ADD "timestamp" character varying(30) NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'`);
 
     for (const item of items) {
+      const triggeredAtTimestamp = new Date(item.triggeredAtTimestamp || Date.now()).toISOString()
       await insertItemIntoTable('timer', {
         ...item,
-        triggeredAtTimestamp: new Date(item.triggeredAtTimestamp || Date.now()).toISOString(),
+        triggeredAtTimestamp: triggeredAtTimestamp || new Date().toISOString(),
       }, queryRunner);
     }
 
     for (const item of items2) {
+      const timestamp = new Date(item.triggeredAtTimestamp || Date.now()).toISOString()
       await insertItemIntoTable('timer_response', {
         ...item,
-        timestamp: new Date(item.timestamp || Date.now()).toISOString(),
+        timestamp: timestamp || new Date().toISOString(),
       }, queryRunner);
     }
   }
