@@ -14,7 +14,7 @@ export class quoteCreatedAtChange1662119547477 implements MigrationInterface {
     for (const item of items) {
       await insertItemIntoTable('quotes', {
         ...item,
-        createdAt: new Date(item.createdAt).toISOString(),
+        createdAt: new Date().toISOString(),
       }, queryRunner);
     }
   }
