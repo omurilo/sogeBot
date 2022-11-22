@@ -28,15 +28,15 @@ export class updateHighlightAndPolls1665996411181 implements MigrationInterface 
     await queryRunner.query(`ALTER TABLE "poll" ADD "closedAt" character varying(30)`);
 
     for (const item of items) {
-      item.createdAt = new Date(item.createdAt).toISOString();
+      item.createdAt = new Date().toISOString();
       await insertItemIntoTable('highlight', {
         ...item,
       }, queryRunner);
     }
 
     for (const item of items2) {
-      item.openedAt = new Date(item.openedAt).toISOString();
-      item.closedAt = item.isOpened ? null : new Date(item.closedAt).toISOString();
+      item.openedAt = new Date().toISOString();
+      item.closedAt = item.isOpened ? null : new Date().toISOString();
       item.votes = JSON.stringify(items3.filter((o: any) => o.pollId === item.id));
       delete item.isOpened;
       await insertItemIntoTable('poll', {
