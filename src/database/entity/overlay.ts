@@ -1,4 +1,5 @@
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 export interface OverlayMapperInterfaceCommon {
   id: string; groupId: string | null; name: string | null;
@@ -375,7 +376,7 @@ export const OverlayMapper = new EntitySchema<Readonly<Required<OverlayMappers>>
   name:    'overlay_mapper',
   columns: {
     id: {
-      type: String, primary: true, generated: 'uuid',
+      type: String, primary: true, default: v4(),
     },
     name:    { type: String, nullable: true },
     groupId: { type: String, nullable: true },

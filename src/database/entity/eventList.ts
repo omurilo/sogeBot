@@ -1,4 +1,5 @@
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 
@@ -16,7 +17,7 @@ export const EventList = new EntitySchema<Readonly<Required<EventListInterface>>
   name:    'event_list',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     event:       { type: String },
     userId:      { type: String },

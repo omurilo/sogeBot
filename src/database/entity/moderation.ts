@@ -1,4 +1,5 @@
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 
@@ -23,7 +24,7 @@ export const ModerationWarning = new EntitySchema<Readonly<Required<ModerationWa
   name:    'moderation_warning',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     userId:    { type: String },
     timestamp: {
@@ -39,7 +40,7 @@ export const ModerationPermit = new EntitySchema<Readonly<Required<ModerationPer
   name:    'moderation_permit',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     userId: { type: String },
   },

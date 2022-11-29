@@ -1,5 +1,6 @@
 import type { EntitySchemaColumnOptions } from 'typeorm';
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 
@@ -235,7 +236,7 @@ export interface AlertResubInterface extends CommonSettingsInterface {
 
 export const CommonSettingsSchema = {
   id: {
-    type: 'uuid', primary: true, generated: 'uuid',
+    type: 'uuid', primary: true, default: v4(),
   } as EntitySchemaColumnOptions,
   alertId: {
     nullable: true, name: 'alertId', type: String,
@@ -269,7 +270,7 @@ export const Alert = new EntitySchema<Readonly<Required<AlertInterface>>>({
   name:    'alert',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     updatedAt: {
       type: 'bigint', transformer: new ColumnNumericTransformer(), default: 0,

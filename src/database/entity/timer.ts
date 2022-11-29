@@ -1,10 +1,11 @@
 import { IsNotEmpty, MinLength, Matches, Min } from 'class-validator';
 import { ManyToOne, OneToMany } from 'typeorm';
 import { BaseEntity, Column, Entity, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 @Entity()
 export class Timer extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ default: v4(), type: 'uuid' })
     id: string;
 
   @Column()
@@ -39,7 +40,7 @@ export class Timer extends BaseEntity {
 
 @Entity()
 export class TimerResponse extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ default: v4(), type: 'uuid' })
     id: string;
 
   @Column({ type: 'varchar', length: '2022-07-27T00:30:34.569259834Z'.length, default: '1970-01-01T00:00:00.000Z' })

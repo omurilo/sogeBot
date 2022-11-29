@@ -2,6 +2,7 @@ import {
   Field, ID, ObjectType,
 } from 'type-graphql';
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 
@@ -90,7 +91,7 @@ export const Variable = new EntitySchema<Readonly<Required<VariableInterface>>>(
     id: {
       type:      'uuid',
       primary:   true,
-      generated: 'uuid',
+      default: v4(),
     },
     variableName: { type: String },
     description:  {
@@ -192,7 +193,7 @@ export const VariableURL = new EntitySchema<Readonly<VariableURLInterface>>({
     id: {
       type:      String,
       primary:   true,
-      generated: 'uuid',
+      default: v4(),
     },
     GET: {
       type:    Boolean,

@@ -1,9 +1,10 @@
 import { ArrayMinSize, IsNotEmpty, MinLength } from 'class-validator';
 import { BaseEntity, Column, Entity, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 @Entity()
 export class Poll extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid' })
+  @PrimaryColumn({ default: v4() })
     id: string;
 
   @Column({ type: 'varchar', length: 7 })

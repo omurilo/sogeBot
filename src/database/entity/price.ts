@@ -1,11 +1,12 @@
 import { IsNotEmpty, IsPositive, MinLength, ValidateIf } from 'class-validator';
 import { BaseEntity, Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { IsCommand } from '../validators/IsCommand';
 
 @Entity()
 export class Price extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid' })
+  @PrimaryColumn({ default: v4() })
     id: string;
 
   @Column()

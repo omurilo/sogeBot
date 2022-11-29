@@ -1,9 +1,10 @@
 import { IsNotEmpty, MinLength } from 'class-validator';
 import { BaseEntity, Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 @Entity()
 export class Cooldown extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ default: v4(), type: 'uuid' })
     id: string;
 
   @Column()

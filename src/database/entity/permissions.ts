@@ -1,5 +1,6 @@
 import { BotEntity } from '../BotEntity';
 import { Index, Column, PrimaryColumn, EventSubscriber, RemoveEvent, UpdateEvent, InsertEvent, EntitySubscriberInterface, Entity } from 'typeorm';
+import { v4 } from 'uuid';
 
 export const permissionCommands: PermissionCommands[] = [];
 export const populateCache = () => {
@@ -47,7 +48,7 @@ export class PermissionCommandsSubscriber implements EntitySubscriberInterface<P
 
 @Entity()
 export class Permissions extends BotEntity<Permissions> {
-  @PrimaryColumn({ generated: 'uuid' })
+  @PrimaryColumn({ default: v4() })
     id: string;
 
   @Column()
@@ -80,7 +81,7 @@ export class Permissions extends BotEntity<Permissions> {
 
 @Entity()
 export class PermissionCommands extends BotEntity<PermissionCommands>{
-  @PrimaryColumn({ generated: 'uuid' })
+  @PrimaryColumn({ default: v4() })
     id: string;
 
   @Column()
