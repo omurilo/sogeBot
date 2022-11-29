@@ -6,7 +6,7 @@ import { HOUR, MINUTE } from '@sogebot/ui-helpers/constants';
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
 import chalk from 'chalk';
 import * as DiscordJs from 'discord.js';
-import { ChannelType, GatewayIntentBits } from 'discord.js';
+import { SlashCommandBuilder } from '@discordjs/builders'
 import { get } from 'lodash';
 import { IsNull, LessThan, Not } from 'typeorm';
 import { v5 as uuidv5 } from 'uuid';
@@ -376,7 +376,7 @@ class Discord extends Integration {
     return { username, reason };
   }
 
-  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment | string) {
+  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: string | DiscordJs.Attachment) {
     tmiEmitter.emit('ban', username);
     eventEmitter.emit('ban', {
       userName: username,
@@ -386,19 +386,18 @@ class Discord extends Integration {
     this.announceBan(author, username, user, reason, attachment);
   }
 
-  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment | string) {
-    const embedBody: DiscordJs.MessageEmbedOptions = {
-      color: author.accentColor || 'DARK_RED',
+  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: string | DiscordJs.Attachment) {
+    const embedBody: DiscordJs.EmbedData = {
+      color: author.accentColor || DiscordJs.Colors.DarkRed,
       description: `${user.userName} baniu um usuário na live`,
       title: 'Usuário banido na live',
       fields: [{ name: 'Nome de usuário', value: username }, { name: 'Motivo', value: reason || '' }],
       footer: {
         text: 'Esse já era ou alguém é contra?'
       },
-      thumbnail: {},
       author: {
         name: author.tag,
-        icon_url: author.avatarURL() || ''
+        iconURL: author.avatarURL() || ''
       },
       timestamp: new Date(),
     }
@@ -411,7 +410,7 @@ class Discord extends Integration {
       embedBody["thumbnail"] = { url: attachment }
     }
 
-    const embed = new DiscordJs.MessageEmbed(embedBody);
+    const embed = new DiscordJs.EmbedBuilder(embedBody);
 
     const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator)
 
@@ -419,26 +418,25 @@ class Discord extends Integration {
     chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
   }
 
-  async timeoutUser(username: string, seconds: number, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.MessageAttachment) {
+  async timeoutUser(username: string, seconds: number, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: DiscordJs.Attachment) {
     tmiEmitter.emit('timeout', username, seconds, isModerator(user));
     eventEmitter.emit('timeout', { userName: username, duration: seconds });
 
     await this.announceTimeout(author, username, user, seconds, reason, attachment);
   }
 
-  async announceTimeout(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, duration: number, reason?: string, attachment?: DiscordJs.MessageAttachment) {
-    const embedBody: DiscordJs.MessageEmbedOptions = {
-      color: author.accentColor || 'DARK_ORANGE',
+  async announceTimeout(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, duration: number, reason?: string, attachment?: DiscordJs.Attachment) {
+    const embedBody: DiscordJs.EmbedData = {
+      color: author.accentColor || DiscordJs.Colors.DarkOrange,
       description: `${user.userName} deu um timeout de ${duration} segundos em um usuário na live`,
       title: 'Usuário "timeoutado" na live',
       fields: [{ name: 'Nome de usuário', value: username }, { name: 'Tempo', value: String(duration) }, { name: 'Motivo', value: reason || '' }],
       footer: {
         text: 'Daqui a pouco ele volta, né?!'
       },
-      thumbnail: {},
       author: {
         name: author.tag,
-        icon_url: author.avatarURL() || ''
+        iconURL: author.avatarURL() || ''
       },
       timestamp: new Date(),
     }
@@ -447,7 +445,7 @@ class Discord extends Integration {
       embedBody["thumbnail"] = { url: attachment.url, proxyURL: attachment.proxyURL, height: attachment.height!, width: attachment.width! }
     }
 
-    const embed = new DiscordJs.MessageEmbed(embedBody);
+    const embed = new DiscordJs.EmbedBuilder(embedBody);
 
     const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator)
 
@@ -603,7 +601,7 @@ class Discord extends Integration {
 
       const message = attributesReplace(attributes, String(operation.messageToSend));
       const messageContent = await self.replaceLinkedUsernameInMessage(await new Message(message).parse());
-      const channel = await self.client.guilds.cache.get(self.guild)?.channels.cache.get(dMchannel);
+      const channel = self.client.guilds.cache.get(self.guild)?.channels.cache.get(dMchannel);
       await (channel as DiscordJs.TextChannel).send(messageContent);
       chatOut(`#${(channel as DiscordJs.TextChannel).name}: ${messageContent} [${self.client.user?.tag}]`);
     } catch (e: any) {
@@ -632,10 +630,10 @@ class Discord extends Integration {
     if (!this.client) {
       this.client = new DiscordJs.Client({
         intents: [
-          GatewayIntentBits.GuildMessages,
-          GatewayIntentBits.Guilds,
-          GatewayIntentBits.MessageContent,
-          GatewayIntentBits.DirectMessages,
+          DiscordJs.GatewayIntentBits.GuildMessages,
+          DiscordJs.GatewayIntentBits.Guilds,
+          DiscordJs.GatewayIntentBits.MessageContent,
+          DiscordJs.GatewayIntentBits.DirectMessages,
         ],
         partials: [
           DiscordJs.Partials.Reaction,
@@ -667,7 +665,7 @@ class Discord extends Integration {
           .addStringOption(option => option.setName("username").setDescription("Nome do usuário da twitch").setRequired(true))
           .addStringOption(option => option.setName("reason").setDescription("Motivo do banimento (opcional)").setRequired(false))
           .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
-          .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS)
+          .setDefaultMemberPermissions(DiscordJs.PermissionsBitField.Flags.BanMembers | DiscordJs.PermissionsBitField.Flags.KickMembers)
 
           const timeoutCommand = new SlashCommandBuilder().setName('timeout').setDescription("Dar timeout em um usuário na live")
           .addStringOption(option => option.setName("username").setDescription("Nome do usuário da twitch").setRequired(true))
@@ -708,11 +706,11 @@ class Discord extends Integration {
           )
           .addStringOption(option => option.setName("reason").setDescription("Motivo do timeout (opcional)").setRequired(false))
           .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
-          .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS | DiscordJs.Permissions.FLAGS.MUTE_MEMBERS)
+          .setDefaultMemberPermissions(DiscordJs.PermissionsBitField.Flags.BanMembers | DiscordJs.PermissionsBitField.Flags.KickMembers | DiscordJs.PermissionsBitField.Flags.MuteMembers)
 
-          const modalCommand = new SlashCommandBuilder().setName('ban-modal').setDescription("teste de abertura de modal")
+          const modalCommand = new SlashCommandBuilder().setName('ban-modal').setDescription("Banir usuário com prova do crime (print do motivo)")
           .addAttachmentOption(option => option.setName("proof").setDescription("Prova do crime (print do motivo) (opcional)").setRequired(false))
-          .setDefaultMemberPermissions(DiscordJs.Permissions.FLAGS.BAN_MEMBERS | DiscordJs.Permissions.FLAGS.KICK_MEMBERS | DiscordJs.Permissions.FLAGS.MUTE_MEMBERS)
+          .setDefaultMemberPermissions(DiscordJs.PermissionsBitField.Flags.BanMembers | DiscordJs.PermissionsBitField.Flags.KickMembers | DiscordJs.PermissionsBitField.Flags.MuteMembers)
 
           commands?.create(banCommand.toJSON()).then(() => info(chalk.yellow("DISCORD: ") + 'ban slash command created'))
           commands?.create(timeoutCommand.toJSON()).then(() => info(chalk.yellow("DISCORD: ") + 'timeout slash command created'))
@@ -726,30 +724,30 @@ class Discord extends Integration {
       this.client.on("interactionCreate", async (interaction) => {
         if (interaction.isButton()) {
           if (interaction.customId === 'ban-confirm') {
-            const username = new DiscordJs.TextInputComponent()
+            const username = new DiscordJs.TextInputBuilder()
             .setCustomId('username-input')
             .setLabel('Nome do usuário na twitch')
-            .setStyle('SHORT')
+            .setStyle(DiscordJs.TextInputStyle.Short)
             .setPlaceholder('Nome do usuário sem "@"')
             .setRequired(true);
 
-            const reason = new DiscordJs.TextInputComponent()
+            const reason = new DiscordJs.TextInputBuilder()
             .setCustomId('reason-input')
             .setLabel('Motivo do banimento')
-            .setStyle('PARAGRAPH')
+            .setStyle(DiscordJs.TextInputStyle.Paragraph)
             .setPlaceholder('Eu quero banir o malandro porque ele estava fazendo tal coisa')
             .setRequired(true);
 
-            const inputFileUrl = new DiscordJs.TextInputComponent()
+            const inputFileUrl = new DiscordJs.TextInputBuilder()
             .setCustomId('proof-image-input')
             .setLabel('Url da imagem de prova do malandro')
-            .setStyle('SHORT')
+            .setStyle(DiscordJs.TextInputStyle.Short)
             .setValue(interaction.message.embeds[0].image?.url ?? '')
             .setPlaceholder('Não precisa se não quiser')
 
-            const rows = [username, reason, inputFileUrl].map((component) => new DiscordJs.MessageActionRow<DiscordJs.ModalActionRowComponent>().addComponents(component))
+            const rows = [username, reason, inputFileUrl].map((component) => new DiscordJs.ActionRowBuilder<DiscordJs.TextInputBuilder>().addComponents(component))
 
-            const modal = new DiscordJs.Modal()
+            const modal = new DiscordJs.ModalBuilder()
               .setCustomId('ban-modal')
               .setTitle('Informe os dados para o banimento')
               .addComponents(...rows);
@@ -811,7 +809,7 @@ class Discord extends Integration {
           }
         }
 
-        if (!interaction.isCommand()) {
+        if (!interaction.isChatInputCommand()) {
           return;
         }
 
@@ -820,21 +818,21 @@ class Discord extends Integration {
         if (commandName === "ban-modal") {
           await interaction.deferReply({ ephemeral: true })
           const attachment = options.getAttachment("proof");
-          const row = new DiscordJs.MessageActionRow();
+          const row = new DiscordJs.ActionRowBuilder<DiscordJs.ButtonBuilder>();
 
-          const confirmButton = new DiscordJs.MessageButton()
+          const confirmButton = new DiscordJs.ButtonBuilder()
           .setCustomId('ban-confirm')
-          .setStyle('SUCCESS')
+          .setStyle(DiscordJs.ButtonStyle.Success)
           .setLabel('Quero banir um malandro')
 
-          const denyButton = new DiscordJs.MessageButton()
+          const denyButton = new DiscordJs.ButtonBuilder()
           .setCustomId('ban-cancel')
-          .setStyle('DANGER')
+          .setStyle(DiscordJs.ButtonStyle.Danger)
           .setLabel('Eu fiz sem querer')
 
           row.addComponents(confirmButton, denyButton)
 
-          const embed = new DiscordJs.MessageEmbed()
+          const embed = new DiscordJs.EmbedBuilder()
             .setImage(attachment?.url ?? '')
             .setTitle('Banimento de usuário')
             .setDescription('Você vai banir um usuário? Então clica no botão ai embaixo e informa o nome do malandro pra nois!')
@@ -844,11 +842,13 @@ class Discord extends Integration {
             embeds: [embed],
           });
 
-          const collector = interaction.channel?.createMessageComponentCollector({ componentType: 'BUTTON', max: 1 });
+          const collector = interaction.channel?.createMessageComponentCollector({ componentType: DiscordJs.ComponentType.Button, max: 1 });
 
           collector?.on('end', async i => {
             if (['ban-confirm', 'ban-cancel'].includes(i.first()?.customId || '')) {
-              row.components.map(b => b.setDisabled(true));
+              row.components.map(b => {
+                return DiscordJs.ButtonBuilder.from(b).setDisabled(true)
+              });
               interaction.editReply({ embeds: [embed], components: [row] })
             }
           })
@@ -967,7 +967,7 @@ class Discord extends Integration {
         if (this.client && this.guild) {
 
           const isSelf = msg.author.tag === get(this.client, 'user.tag', null);
-          const isDM = msg.channel.type === ChannelType.DM;
+          const isDM = msg.channel.type === DiscordJs.ChannelType.DM;
           const isDifferentGuild = msg.guild?.id !== this.guild;
           const isInIgnoreList
              = this.ignorelist.includes(msg.author.tag)
@@ -977,7 +977,7 @@ class Discord extends Integration {
             return;
           }
 
-          if (msg.channel.type === ChannelType.GuildText) {
+          if (msg.channel.type === DiscordJs.ChannelType.GuildText) {
             const listenAtChannels = [
               ...Array.isArray(this.listenAtChannels) ? this.listenAtChannels : [this.listenAtChannels],
             ].filter(o => o !== '');
@@ -990,7 +990,7 @@ class Discord extends Integration {
     }
   }
 
-  async message(content: string, channel: DiscordJsTextChannel, author: DiscordJsUser, msg?: DiscordJs.Message) {
+  async message(content: string, channel: DiscordJs.TextChannel, author: DiscordJs.User, msg?: DiscordJs.Message) {
     chatIn(`#${channel.name}: ${content} [${author.tag}]`);
     if (msg) {
       const broadcasterUsername = variables.get('services.twitch.broadcasterUsername') as string;
@@ -1086,7 +1086,7 @@ class Discord extends Integration {
           if (responses) {
             for (let i = 0; i < responses.length; i++) {
               setTimeout(async () => {
-                if (channel.type === ChannelType.GuildText) {
+                if (channel.type === DiscordJs.ChannelType.GuildText) {
                   const messageToSend = await new Message(await responses[i].response).parse({
                     ...responses[i].attr,
                     forceWithoutAt: true, // we dont need @
@@ -1183,7 +1183,7 @@ class Discord extends Integration {
       try {
         if (this.client && this.guild) {
           cb(null, this.client.guilds.cache.get(this.guild)?.channels.cache
-            .filter(o => o.type === ChannelType.GuildText)
+            .filter(o => o.type === DiscordJs.ChannelType.GuildText)
             .sort((a, b) => {
               const nameA = (a as DiscordJs.TextChannel).name.toUpperCase(); // ignore upper and lowercase
               const nameB = (b as DiscordJs.TextChannel).name.toUpperCase(); // ignore upper and lowercase
