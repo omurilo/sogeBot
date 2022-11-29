@@ -2,6 +2,7 @@ import {
   createUnionType, Field, ID, InputType, ObjectType,
 } from 'type-graphql';
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 export const SearchResultUnion = createUnionType({
   name:        'SearchResult',
@@ -163,7 +164,7 @@ export const QuickAction = new EntitySchema<Readonly<Required<QuickActions.Item>
   name:    'quickaction',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     userId:  { type: String },
     order:   { type: Number },

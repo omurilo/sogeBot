@@ -1,4 +1,5 @@
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer.js';
 
@@ -108,7 +109,7 @@ export const TwitchTagLocalizationName = new EntitySchema<Readonly<Required<Twit
   name:    'twitch_tag_localization_name',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     locale: { type: String },
     value:  { type: String },
@@ -139,7 +140,7 @@ export const TwitchTagLocalizationDescription = new EntitySchema<Readonly<Requir
   name:    'twitch_tag_localization_description',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     locale: { type: String },
     value:  { type: 'text' },

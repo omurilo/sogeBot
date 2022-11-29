@@ -1,4 +1,5 @@
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 import { AlertInterface } from './alert';
@@ -54,7 +55,7 @@ export const Randomizer = new EntitySchema<Readonly<Required<RandomizerInterface
   name:    'randomizer',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     createdAt: {
       type: 'bigint', transformer: new ColumnNumericTransformer(), default: 0,
@@ -92,7 +93,7 @@ export const RandomizerItem = new EntitySchema<Readonly<Required<RandomizerItemI
   name:    'randomizer_item',
   columns: {
     id: {
-      type: String, primary: true, generated: 'uuid',
+      type: String, primary: true, default: v4(),
     },
     randomizerId: {
       type: 'uuid', name: 'randomizerId', nullable: true,

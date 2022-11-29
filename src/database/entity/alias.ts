@@ -1,5 +1,6 @@
 import { IsNotEmpty, MinLength } from 'class-validator';
 import { BaseEntity, Column, Entity, Index, PrimaryColumn, EventSubscriber, EntitySubscriberInterface, InsertEvent, UpdateEvent, RemoveEvent } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { IsCommand } from '../validators/IsCommand';
 import { IsCommandOrCustomVariable } from '../validators/IsCommandOrCustomVariable';
@@ -89,7 +90,7 @@ export class AliasGroupSubscriber implements EntitySubscriberInterface<AliasGrou
 
 @Entity()
 export class Alias extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid' })
+  @PrimaryColumn({ default: v4() })
     id: string;
 
   @Column()
