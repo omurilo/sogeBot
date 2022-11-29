@@ -1,8 +1,8 @@
+import { IsNotEmpty, IsNumber, MinLength } from 'class-validator';
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 
-import { BotEntity } from '../BotEntity';
-import { IsNotEmpty, IsNumber, MinLength } from 'class-validator';
 import defaultPermissions from '../../helpers/permissions/defaultPermissions';
+import { BotEntity } from '../BotEntity';
 import { IsCustomVariable } from '../validators/isCustomVariable';
 
 @Entity()

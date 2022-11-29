@@ -1,11 +1,12 @@
 import { IsNotEmpty, MinLength } from 'class-validator';
 import { BaseEntity, Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { IsCommand } from '../validators/IsCommand';
 
 @Entity()
 export class Commands extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ default: v4(), type: 'uuid' })
     id: string;
 
   @Column()
@@ -50,7 +51,7 @@ export class CommandsGroup extends BaseEntity {
 
 @Entity()
 export class CommandsCount extends BaseEntity {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ default: v4(), type: 'uuid' })
     id: string;
 
   @Index('IDX_2ccf816b1dd74e9a02845c4818')

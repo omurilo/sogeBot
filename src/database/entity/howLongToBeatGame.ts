@@ -1,4 +1,5 @@
 import { BeforeInsert, BeforeUpdate, Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 import { BotEntity } from '~/database/BotEntity';
 import { IsNotEmpty, MinLength } from 'class-validator';
 
@@ -7,7 +8,7 @@ import { ColumnNumericTransformer } from './_transformer';
 @Entity()
 @Index('IDX_301758e0e3108fc902d5436527', ['game'], { unique: true })
 export class HowLongToBeatGame extends BotEntity<HowLongToBeatGame> {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ default: v4(), type: 'uuid' })
     id: string;
 
   @Column()

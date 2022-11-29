@@ -1,9 +1,10 @@
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 import { BotEntity } from '~/database/BotEntity';
 
 @Entity()
 export class Bets extends BotEntity<Bets> {
-  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
+  @PrimaryColumn({ type: 'uuid', default: v4() })
     id: string;
 
   @Column({ nullable: false, type: 'varchar', length: '2022-07-27T00:30:34.569259834Z'.length })

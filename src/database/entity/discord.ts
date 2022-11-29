@@ -1,4 +1,5 @@
 import { EntitySchema } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 
@@ -14,7 +15,7 @@ export const DiscordLink = new EntitySchema<Readonly<Required<DiscordLinkInterfa
   name:    'discord_link',
   columns: {
     id: {
-      type: 'uuid', primary: true, generated: 'uuid',
+      type: 'uuid', primary: true, default: v4(),
     },
     tag:       { type: String },
     discordId: { type: String },

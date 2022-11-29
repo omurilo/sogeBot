@@ -1,4 +1,5 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+
 import { BotEntity } from '../BotEntity';
 
 @Entity()
