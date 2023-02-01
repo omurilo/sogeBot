@@ -9,16 +9,16 @@ export class updateCustomVariables1666167883935 implements MigrationInterface {
     const items2 = await queryRunner.query(`SELECT * from "variable_history"`);
     const items3 = await queryRunner.query(`SELECT * from "variable_url"`);
 
+    await queryRunner.query(`DROP TABLE "variable_history"`);
+    await queryRunner.query(`DROP TABLE  "variable_url"`);
+
+    await queryRunner.query(`DELETE FROM "variable" WHERE 1=1`);
+
     await queryRunner.query(`ALTER TABLE "variable" ADD "history" json NOT NULL`);
     await queryRunner.query(`ALTER TABLE "variable" ADD "urls" json NOT NULL`);
     await queryRunner.query(`ALTER TABLE "variable" ADD CONSTRAINT "UQ_dd084634ad76dbefdca837b8de4" UNIQUE ("variableName")`);
     await queryRunner.query(`ALTER TABLE "variable" DROP COLUMN "runAt"`);
     await queryRunner.query(`ALTER TABLE "variable" ADD "runAt" character varying(30) NOT NULL`);
-
-    await queryRunner.query(`DROP TABLE "variable_history"`);
-    await queryRunner.query(`DROP TABLE  "variable_url"`);
-
-    await queryRunner.query(`DELETE FROM "variable" WHERE 1=1`);
 
     for (const item of items) {
       item.history = JSON.stringify(items2.filter((o: { variableId: any; }) => o.variableId === item.id));
