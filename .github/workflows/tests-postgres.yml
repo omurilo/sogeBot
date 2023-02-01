@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - 'master'
+      - 'luacomtio'
   pull_request:
 
 jobs:
