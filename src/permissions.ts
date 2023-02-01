@@ -1,15 +1,16 @@
-import { getRepository } from 'typeorm';
+import { AppDataSource } from '~/database';
 
 import Core from '~/_interface';
-import { Permissions as PermissionsEntity, populateCache } from '~/database/entity/permissions';
+import { Permissions as PermissionsEntity } from '~/database/entity/permissions';
 import { User } from '~/database/entity/user';
 import { command, default_permission } from '~/decorators';
 import { onStartup } from '~/decorators/on';
 import Expects from '~/expects';
 import { prepare } from '~/helpers/commons';
 import { error } from '~/helpers/log';
-import { get } from '~/helpers/permissions';
-import { check, defaultPermissions } from '~/helpers/permissions/index';
+import { get } from '~/helpers/permissions/get';
+import { defaultPermissions } from '~/helpers/permissions/defaultPermissions';
+import { check } from '~/helpers/permissions/check';
 import { adminEndpoint } from '~/helpers/socket';
 import * as changelog from '~/helpers/user/changelog.js';
 import users from '~/users';
@@ -21,7 +22,6 @@ class Permissions extends Core {
       category: 'settings', name: 'permissions', id: 'settings/permissions', this: null,
     });
     this.ensurePreservedPermissionsInDb();
-    populateCache();
   }
 
   public sockets() {
@@ -51,13 +51,13 @@ class Permissions extends Core {
       }
     });
     adminEndpoint('/core/permissions', 'test.user', async (opts, cb) => {
-      if (!(await PermissionsEntity.findOne({ id: String(opts.pid) }))) {
+      if (!(await PermissionsEntity.findOneBy({ id: String(opts.pid) }))) {
         cb('permissionNotFoundInDatabase');
         return;
       }
       if (typeof opts.value === 'string') {
         await changelog.flush();
-        const userByName = await getRepository(User).findOne({ userName: opts.value });
+        const userByName = await AppDataSource.getRepository(User).findOneBy({ userName: opts.value });
         if (userByName) {
           const status = await check(userByName.userId, opts.pid);
           const partial = await check(userByName.userId, opts.pid, true);

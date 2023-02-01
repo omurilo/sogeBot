@@ -1,6 +1,5 @@
 import { ArrayMinSize, IsNotEmpty, MinLength } from 'class-validator';
-import { BaseEntity, Column, Entity, PrimaryColumn } from 'typeorm';
-import { v4 } from 'uuid';
+import { BaseEntity, Column, Entity, IsNull, PrimaryColumn } from 'typeorm';
 
 @Entity()
 export class Poll extends BaseEntity {
@@ -33,6 +32,6 @@ export class Poll extends BaseEntity {
   }[] = [];
 
   static findOpened() {
-    return this.findOne({ where: { closedAt: null } });
+    return this.findOne({ where: { closedAt: IsNull() } });
   }
 }

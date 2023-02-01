@@ -1,18 +1,52 @@
+import { AppDataSource } from '~/database';
+import { isStreamOnline, stats } from '~/helpers/api';
+import { attributesReplace } from '~/helpers/attributesReplace';
+import {
+  announceTypes, getOwner, getUserSender, isUUID, prepare,
+} from '~/helpers/commons';
+import { isBotStarted, isDbConnected } from '~/helpers/database';
+import { debounce } from '~/helpers/debounce';
+
 import { DiscordLink } from '@entity/discord';
+
+import { eventEmitter } from '~/helpers/events';
+
 import { Events } from '@entity/event';
+
+import {
+  chatIn, chatOut, debug, error, info, warning, whisperOut,
+} from '~/helpers/log';
+
 import { Permissions as PermissionsEntity } from '@entity/permissions';
+
+import { check } from '~/helpers/permissions/check';
+
 import { User, UserInterface } from '@entity/user';
+
+import { get as getPermission } from '~/helpers/permissions/get';
+
 import { HOUR, MINUTE } from '@sogebot/ui-helpers/constants';
+
+import { adminEndpoint } from '~/helpers/socket';
+
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
+import { isModerator } from '../helpers/user';
+import { tmiEmitter } from '../helpers/tmi';
+
+import * as changelog from '~/helpers/user/changelog.js';
+
 import chalk from 'chalk';
+
+import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
+import { variables } from '~/watchers';
+
 import * as DiscordJs from 'discord.js';
 import { SlashCommandBuilder } from '@discordjs/builders'
 import { get } from 'lodash';
-import {
-  getRepository, IsNull, LessThan, Not,
-} from 'typeorm';
+import { IsNull, LessThan, Not } from 'typeorm';
 import { v5 as uuidv5 } from 'uuid';
 
+import Integration from './_interface';
 import {
   command, persistent, settings,
 } from '../decorators';
@@ -24,27 +58,6 @@ import Expects from '../expects';
 import { Message } from '../message';
 import Parser from '../parser';
 import users from '../users';
-import Integration from './_interface';
-
-import { isStreamOnline, stats } from '~/helpers/api';
-import { attributesReplace } from '~/helpers/attributesReplace';
-import {
-  announceTypes, getOwner, getUserSender, isUUID, prepare,
-} from '~/helpers/commons';
-import { isBotStarted, isDbConnected } from '~/helpers/database';
-import { debounce } from '~/helpers/debounce';
-import { eventEmitter } from '~/helpers/events';
-import {
-  chatIn, chatOut, debug, error, info, warning, whisperOut,
-} from '~/helpers/log';
-import { get as getPermission } from '~/helpers/permissions/get';
-import { check } from '~/helpers/permissions/index';
-import { adminEndpoint } from '~/helpers/socket';
-import * as changelog from '~/helpers/user/changelog.js';
-import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
-import { variables } from '~/watchers';
-import { isModerator } from '../helpers/user';
-import { tmiEmitter } from '../helpers/tmi';
 
 class Discord extends Integration {
   client: DiscordJs.Client | null = null;
@@ -87,7 +100,7 @@ class Discord extends Integration {
     };
 
   @settings('bot')
-    fields: string[] = ['$game', '$title', '$startedAt', '$viewers', '$followers', '$subscribers'];
+    fields: string[] = ['$game', '$title', '$tags', '$startedAt', '$viewers', '$followers', '$subscribers'];
 
   @settings('bot')
     fieldsDisabled: string[] = [''];
@@ -182,7 +195,7 @@ class Discord extends Integration {
       }
     }
 
-    const linkedUsers = await getRepository(DiscordLink).find();
+    const linkedUsers = await AppDataSource.getRepository(DiscordLink).find();
     for (const user of linkedUsers) {
       if (!user.userId) {
         continue;
@@ -196,7 +209,7 @@ class Discord extends Integration {
       try {
         discordUser = await guild.members.fetch(user.discordId);
       } catch (e) {
-        await getRepository(DiscordLink).delete({ userId: user.userId });
+        await AppDataSource.getRepository(DiscordLink).delete({ userId: user.userId });
         warning(`Discord user ${user.tag}@${user.discordId} not found - removed from link table`);
         continue;
       }
@@ -283,13 +296,13 @@ class Discord extends Integration {
 
   async removeExpiredLinks() {
     // remove expired links
-    await getRepository(DiscordLink).delete({ userId: IsNull(), createdAt: LessThan(Date.now() - (MINUTE * 10)) });
+    await AppDataSource.getRepository(DiscordLink).delete({ userId: IsNull(), createdAt: LessThan(Date.now() - (MINUTE * 10)) });
   }
 
   @command('!unlink')
   async unlinkAccounts(opts: CommandOptions) {
     this.removeExpiredLinks();
-    await getRepository(DiscordLink).delete({ userId: opts.sender.userId });
+    await AppDataSource.getRepository(DiscordLink).delete({ userId: opts.sender.userId });
     return [{ response: prepare('integrations.discord.all-your-links-were-deleted-with-sender', { sender: opts.sender }), ...opts }];
   }
 
@@ -304,9 +317,9 @@ class Discord extends Integration {
         throw new Error(String(errors.NOT_UUID));
       }
 
-      const link = await getRepository(DiscordLink).findOneOrFail({ id: uuid, userId: IsNull() });
+      const link = await AppDataSource.getRepository(DiscordLink).findOneByOrFail({ id: uuid, userId: IsNull() });
       // link user
-      await getRepository(DiscordLink).save({ ...link, userId: opts.sender.userId });
+      await AppDataSource.getRepository(DiscordLink).save({ ...link, userId: opts.sender.userId });
       return [{ response: prepare('integrations.discord.this-account-was-linked-with', { sender: opts.sender, discordTag: link.tag }), ...opts }];
     } catch (e: any) {
       if (e.message.includes('Expected parameter')) {
@@ -480,6 +493,9 @@ class Discord extends Integration {
     if (o === '$title') {
       return { name: prepare('webpanel.responses.variable.title'), value: stats.value.currentTitle ?? '' };
     }
+    if (o === '$tags') {
+      return { name: prepare('webpanel.responses.variable.tags'), value: `${(stats.value.currentTags ?? []).map(tag => `${tag}`).join(', ')}` ?? '' };
+    }
     if (o === '$startedAt') {
       if (isOnline) {
         return { name: prepare('integrations.discord.started-at'), value: this.embedStartedAt, inline: true };
@@ -589,7 +605,7 @@ class Discord extends Integration {
       }
       const userName = attributes.username === null || typeof attributes.username === 'undefined' ? getOwner() : attributes.username;
       await changelog.flush();
-      const userObj = await getRepository(User).findOne({ userName });
+      const userObj = await AppDataSource.getRepository(User).findOneBy({ userName });
       if (!attributes.test) {
         if (!userObj) {
           changelog.update(await getIdFromTwitch(userName), { userName });
@@ -615,7 +631,7 @@ class Discord extends Integration {
       if (match) {
         const username = match.groups?.username as string;
         const userId = await users.getIdByName(username);
-        const link = await getRepository(DiscordLink).findOne({ userId });
+        const link = await AppDataSource.getRepository(DiscordLink).findOneBy({ userId });
         if (link) {
           message = message.replace(`@${username}`, `<@${link.discordId}>`);
         }
@@ -762,7 +778,7 @@ class Discord extends Integration {
                 ephemeral: true,
               });
 
-              const link = await getRepository(DiscordLink).findOneOrFail({
+              const link = await AppDataSource.getRepository(DiscordLink).findOneByOrFail({
                 discordId: interaction.user.id,
                 userId: Not(IsNull()),
               });
@@ -863,7 +879,7 @@ class Discord extends Integration {
               ephemeral: true,
             });
 
-            const link = await getRepository(DiscordLink).findOneOrFail({
+            const link = await AppDataSource.getRepository(DiscordLink).findOneByOrFail({
               discordId: interaction.user.id,
               userId: Not(IsNull()),
             });
@@ -914,7 +930,7 @@ class Discord extends Integration {
               ephemeral: true,
             });
 
-            const link = await getRepository(DiscordLink).findOneOrFail({
+            const link = await AppDataSource.getRepository(DiscordLink).findOneByOrFail({
               discordId: interaction.user.id,
               userId: Not(IsNull()),
             });
@@ -1010,7 +1026,7 @@ class Discord extends Integration {
       }
       if (content === this.getCommand('!link')) {
         this.removeExpiredLinks();
-        const link = await getRepository(DiscordLink).save({
+        const link = await AppDataSource.getRepository(DiscordLink).save({
           userId:    null,
           tag:       author.tag,
           discordId: author.id,
@@ -1035,7 +1051,7 @@ class Discord extends Integration {
         }
         return;
       } else if (content === this.getCommand('!unlink')) {
-        await getRepository(DiscordLink).delete({ discordId: author.id });
+        await AppDataSource.getRepository(DiscordLink).delete({ discordId: author.id });
         const reply = await msg.reply(prepare('integrations.discord.all-your-links-were-deleted'));
         chatOut(`#${channel.name}: @${author.tag}, ${prepare('integrations.discord.all-your-links-were-deleted')} [${author.tag}]`);
         if (this.deleteMessagesAfterWhile) {
@@ -1059,7 +1075,7 @@ class Discord extends Integration {
     }
     try {
       // get linked account
-      const link = await getRepository(DiscordLink).findOneOrFail({ discordId: author.id, userId: Not(IsNull()) });
+      const link = await AppDataSource.getRepository(DiscordLink).findOneByOrFail({ discordId: author.id, userId: Not(IsNull()) });
       if (link.userId) {
         const user = await changelog.getOrFail(link.userId);
         const parser = new Parser();

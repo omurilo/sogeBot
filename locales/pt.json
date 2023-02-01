@@ -320,6 +320,7 @@
     },
     "responses": {
       "variable": {
+        "tags": "Tags",
         "titleOfPrediction": "Palpites Twitch - Título",
         "outcomes": "Palpites Twitch - Resultado",
         "locksAt": "Palpites Twitch - Bloqueia na Data",
@@ -1085,6 +1086,7 @@
       "none": "Nenhum usuário foi encontrado na fila"
     }
   },
+  "marker": "Marcador de transmissão foi criado em $time.",
   "title": {
     "current": "$sender, o título da transmissão é '$title'.",
     "change": {
@@ -1154,12 +1156,6 @@
       "mod": "$sender é incompetente e perdeu completamente sua cabeça!",
       "broadcaster": "$sender está usando festim, boo!",
       "timeout": "Tempo limite da roleta definido para $values"
-    },
-    "seppuku": {
-      "text": "$sender cometeu um seppuku.",
-      "mod": "$sender tentou cometer um seppuku, mas quebrou uma espada.",
-      "broadcaster": "$sender tentou cometer seppuku, mas perdeu uma espada.",
-      "timeout": "Tempo limite do Seppuku definido para $values"
     },
     "gamble": {
       "chanceToWin": "$sender, a chance de ganhar !gamble definido para $value%",

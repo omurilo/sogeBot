@@ -1,4 +1,4 @@
-import { getRepository } from 'typeorm';
+import { AppDataSource } from '~/database';
 import { GooglePrivateKeys } from '~/database/entity/google';
 import { app } from '~/helpers/panel';
 import { adminMiddleware } from '~/socket';
@@ -7,7 +7,7 @@ import Service from './_interface';
 import { dayjs } from '@sogebot/ui-helpers/dayjsHelper';
 
 import { google, youtube_v3 } from 'googleapis';
-import { error, info } from '~/helpers/log';
+import { error, info, debug } from '~/helpers/log';
 
 import { OAuth2Client } from 'google-auth-library/build/src/auth/oauth2client';
 import { MINUTE } from '@sogebot/ui-helpers/constants';
@@ -50,17 +50,13 @@ class Google extends Service {
   accessToken: null | string = null;
   client: OAuth2Client | null = null;
 
-  onStartupInterval: null | NodeJS.Timer = null;
-  onStartupIntervalPrepareBroadcast: null | NodeJS.Timer = null;
-  chatInterval: null | NodeJS.Timer = null;
-
   broadcastId: string | null = null;
-  gamesPlayedOnStream: { game: string, seconds: number }[] = [];
+  gamesPlayedOnStream: { game: string, timeMark: string }[] = [];
   broadcastStartedAt: string = new Date().toLocaleDateString(getLang());
 
   @onStreamStart()
   onStreamStart() {
-    this.gamesPlayedOnStream = stats.value.currentGame ? [{ game: stats.value.currentGame, seconds: 0 }] : [];
+    this.gamesPlayedOnStream = stats.value.currentGame ? [{ game: stats.value.currentGame, timeMark: '00:00:00' }] : [];
     this.broadcastStartedAt = new Date().toLocaleDateString(getLang());
   }
 
@@ -103,7 +99,7 @@ class Google extends Service {
             description: this.onStreamEndDescriptionEnabled
               ? this.onStreamEndDescription
                 .replace('$chapters', this.gamesPlayedOnStream
-                  .map(item => `${getTime(item.seconds, false)} ${item.game}`)
+                  .map(item => `${item.timeMark} ${item.game}`)
                   .join('\n'))
                 .replace('$title', broadcast.snippet?.title || stats.value.currentTitle || '')
                 .replace('$date', this.broadcastStartedAt)
@@ -120,9 +116,43 @@ class Google extends Service {
     }
   }
 
+  @onStartup()
+  startIntervals() {
+    setInterval(async () => {
+      const stream = await this.getBroadcast();
+
+      if (stream && stream.snippet) {
+        const currentTitle = stats.value.currentTitle || 'n/a';
+        if (stream.snippet.title !== currentTitle && isStreamOnline.value) {
+          info(`YOUTUBE: Title is not matching current title, changing by bot to "${currentTitle}"`);
+          await this.updateTitle(stream, currentTitle);
+        }
+      }
+
+      // add game to list
+      if (stats.value.currentGame
+        && (this.gamesPlayedOnStream.length > 0 && this.gamesPlayedOnStream[this.gamesPlayedOnStream.length - 1].game !== stats.value.currentGame)) {
+        info(`YOTUBE: Game changed to ${stats.value.currentGame} at ${Date.now() - streamStatusChangeSince.value}`);
+        this.gamesPlayedOnStream.push({
+          game:     stats.value.currentGame,
+          timeMark: getTime(streamStatusChangeSince.value, false) as string,
+        });
+      }
+    }, MINUTE);
+
+    setInterval(async () => {
+      const broadcast = await this.getBroadcast();
+
+      if (!broadcast) {
+        this.prepareBroadcast();
+      }
+    }, 15 * MINUTE);
+  }
+
   @onChange('refreshToken')
   @onStartup()
   async onStartup() {
+    debug('google', `Refresh token changed to: ${this.refreshToken}`);
     if (this.refreshToken.length === 0) {
       return;
     }
@@ -166,41 +196,6 @@ class Google extends Service {
       const item = channel.data.items[0].snippet!;
       this.channel = [channel.data.items[0].id, item.title, item.customUrl].filter(String).join(' | ');
       info(`YOUTUBE: Authentication to Google Service successful as ${this.channel}.`);
-
-      if (this.onStartupInterval) {
-        clearInterval(this.onStartupInterval);
-      }
-      this.onStartupInterval = setInterval(async () => {
-        const stream = await this.getBroadcast();
-
-        if (stream && stream.snippet) {
-          const currentTitle = stats.value.currentTitle || 'n/a';
-          if (stream.snippet.title !== currentTitle && isStreamOnline.value) {
-            info(`YOUTUBE: Title is not matching current title, changing by bot to "${currentTitle}"`);
-            await this.updateTitle(stream, currentTitle);
-          }
-        }
-
-        // add game to list
-        if (stats.value.currentGame
-          && (this.gamesPlayedOnStream.length === 0 || this.gamesPlayedOnStream[this.gamesPlayedOnStream.length - 1].game !== stats.value.currentGame)) {
-          this.gamesPlayedOnStream.push({
-            game:    stats.value.currentGame,
-            seconds: (Date.now() / 1000 - Number(dayjs.utc(streamStatusChangeSince.value).unix())),
-          });
-        }
-      }, MINUTE);
-
-      if (this.onStartupIntervalPrepareBroadcast) {
-        clearInterval(this.onStartupIntervalPrepareBroadcast);
-      }
-      this.onStartupInterval = setInterval(async () => {
-        const broadcast = await this.getBroadcast();
-
-        if (!broadcast) {
-          this.prepareBroadcast();
-        }
-      }, 15 * MINUTE);
     } else {
       error(`'YOUTUBE: Couldn't get channel informations.`);
     }
@@ -302,7 +297,7 @@ class Google extends Service {
           },
           status: {
             privacyStatus:           'private',
-            selfDeclaredMadeForKids: false,
+            selfDeclaredMadeForKids: true,
           },
           contentDetails: {
             enableAutoStart: true,
@@ -345,18 +340,18 @@ class Google extends Service {
 
     app.get('/api/services/google/privatekeys', adminMiddleware, async (req, res) => {
       res.send({
-        data: await getRepository(GooglePrivateKeys).find(),
+        data: await AppDataSource.getRepository(GooglePrivateKeys).find(),
       });
     });
 
     app.post('/api/services/google/privatekeys', adminMiddleware, async (req, res) => {
       const data = req.body;
-      await getRepository(GooglePrivateKeys).save(data);
+      await AppDataSource.getRepository(GooglePrivateKeys).save(data);
       res.send({ data });
     });
 
     app.delete('/api/services/google/privatekeys/:id', adminMiddleware, async (req, res) => {
-      await getRepository(GooglePrivateKeys).delete({ id: req.params.id });
+      await AppDataSource.getRepository(GooglePrivateKeys).delete({ id: req.params.id });
       res.status(404).send();
     });
 

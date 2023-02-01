@@ -1,6 +1,5 @@
 require('../../general.js');
 
-const { getRepository } = require('typeorm');
 const assert = require('assert');
 
 const { User } = require('../../../dest/database/entity/user');
@@ -12,7 +11,7 @@ const message = require('../../general.js').message;
 const user = require('../../general.js').user;
 
 const customcommands = (require('../../../dest/systems/customcommands')).default;
-const { defaultPermissions } = (require('../../../dest/helpers/permissions/'));
+const { defaultPermissions } = (require('../../../dest/helpers/permissions/defaultPermissions'));
 
 describe('Custom Commands - @func1 - https://discord.com/channels/317348946144002050/317349069024395264/794732878595752016 - Custom command $param filter should be properly evaluated', () => {
   before(async () => {

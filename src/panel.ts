@@ -3,31 +3,16 @@
 import fs, { existsSync, readFileSync } from 'fs';
 import path from 'path';
 
-import cors from 'cors';
-import express from 'express';
-import { graphqlHTTP } from 'express-graphql';
-import RateLimit from 'express-rate-limit';
-import gitCommitInfo from 'git-commit-info';
-import jwt from 'jsonwebtoken';
-import _ from 'lodash';
-import sanitize from 'sanitize-filename';
-import {
-  getConnection, getManager, getRepository,
-} from 'typeorm';
-
-import { possibleLists } from '../d.ts/src/helpers/socket.js';
-import emitter from './helpers/interfaceEmitter.js';
-
 import Core from '~/_interface';
 import { CacheGames, CacheGamesInterface } from '~/database/entity/cacheGames.js';
 import { CacheTitles } from '~/database/entity/cacheTitles';
 import { Translation } from '~/database/entity/translation';
-import { TwitchTag, TwitchTagInterface } from '~/database/entity/twitch';
 import { User } from '~/database/entity/user';
+import { AppDataSource } from '~/database.js';
 import { onStartup } from '~/decorators/on';
 import { schema } from '~/graphql/schema';
 import {
-  chatMessagesAtStart, currentStreamTags, isStreamOnline, rawStatus, stats, streamStatusChangeSince,
+  chatMessagesAtStart, isStreamOnline, rawStatus, stats, streamStatusChangeSince,
 } from '~/helpers/api';
 import { getOwnerAsSender } from '~/helpers/commons/getOwnerAsSender';
 import {
@@ -54,15 +39,40 @@ import * as changelog from '~/helpers/user/changelog.js';
 import lastfm from '~/integrations/lastfm';
 import spotify from '~/integrations/spotify';
 import Parser from '~/parser';
+
+import cors from 'cors';
+
 import { getGameThumbnailFromName } from '~/services/twitch/calls/getGameThumbnailFromName.js';
+
+import express from 'express';
+
 import { sendGameFromTwitch } from '~/services/twitch/calls/sendGameFromTwitch';
-import { setTags } from '~/services/twitch/calls/setTags';
-import { setTitleAndGame } from '~/services/twitch/calls/setTitleAndGame';
+
+import { graphqlHTTP } from 'express-graphql';
+
+import { updateChannelInfo } from '~/services/twitch/calls/updateChannelInfo.js';
+
+import RateLimit from 'express-rate-limit';
+
 import { default as socketSystem } from '~/socket';
+
+import gitCommitInfo from 'git-commit-info';
+
 import highlights from '~/systems/highlights';
+
+import jwt from 'jsonwebtoken';
+
 import songs from '~/systems/songs';
+
+import _ from 'lodash';
+
 import translateLib, { translate } from '~/translate';
+
+import sanitize from 'sanitize-filename';
+
 import { variables } from '~/watchers';
+
+import { possibleLists } from '../d.ts/src/helpers/socket.js';
 
 const port = Number(process.env.PORT ?? 20000);
 const secureport = Number(process.env.SECUREPORT ?? 20443);
@@ -125,7 +135,9 @@ class Panel extends Core {
 
     app?.get('/health', (req, res) => {
       if (getIsBotStarted()) {
-        res.status(200).send('OK');
+        const version = _.get(process, 'env.npm_package_version', 'x.y.z');
+        const commitFile = existsSync('./.commit') ? readFileSync('./.commit').toString() : null;
+        res.status(200).send(version.replace('SNAPSHOT', commitFile && commitFile.length > 0 ? commitFile : gitCommitInfo().shortHash || 'SNAPSHOT'));
       } else {
         res.status(503).send('Not OK');
       }
@@ -238,13 +250,10 @@ class Panel extends Core {
     app?.get('/webhooks/callback', function (req, res) {
       res.status(200).send('OK');
     });
-    app?.post('/webhooks/callback', function (req, res) {
-      emitter.emit('services::twitch::eventsub', req, res);
-    });
     app?.get('/popout/', function (req, res) {
       res.sendFile(path.join(__dirname, '..', 'public', 'popout.html'));
     });
-    app?.get(['/overlays/:id', '/overlays/text/:id', '/overlays/alerts/:id', '/overlays/goals/:id'], function (req, res) {
+    app?.get(['/overlays/:id', '/overlays/text/:id', '/overlays/alerts/:id', '/overlays/goals/:id', '/overlays/plugins/:id/:nid'], function (req, res) {
       res.sendFile(path.join(__dirname, '..', 'node_modules', '@sogebot', 'ui-overlay', 'dist', 'index.html'));
     });
     app?.get('/public/:page?', function (req, res) {
@@ -304,49 +313,18 @@ class Panel extends Core {
       });
       socketsConnectedInc();
 
-      socket.on('getCachedTags', async (cb: (results: TwitchTagInterface[]) => void) => {
-        const connection = await getConnection();
-        const joinQuery = connection.options.type === 'postgres' ? '"names"."tagId" = "tag_id" AND "names"."locale"' : 'names.tagId = tag_id AND names.locale';
-        let query = getRepository(TwitchTag)
-          .createQueryBuilder('tags')
-          .select('names.locale', 'locale')
-          .addSelect('names.value', 'value')
-          .addSelect('tags.tag_id', 'tag_id')
-          .addSelect('tags.is_auto', 'is_auto')
-          .addSelect('tags.is_current', 'is_current')
-          .leftJoinAndSelect('twitch_tag_localization_name', 'names', `${joinQuery} like :tag`)
-          .setParameter('tag', '%' + getLang() +'%');
-
-        let results = await query.execute();
-        if (results.length > 0) {
-          cb(results);
-        } else {
-        // if we don';t have results with our selected locale => reload with en-us
-          query = getRepository(TwitchTag)
-            .createQueryBuilder('tags')
-            .select('names.locale', 'locale')
-            .addSelect('names.value', 'value')
-            .addSelect('tags.tag_id', 'tag_id')
-            .addSelect('tags.is_auto', 'is_auto')
-            .addSelect('tags.is_current', 'is_current')
-            .leftJoinAndSelect('twitch_tag_localization_name', 'names', `${joinQuery} = :tag`)
-            .setParameter('tag', 'en-us');
-          results = await query.execute();
-        }
-        cb(results);
-      });
       // twitch game and title change
       socket.on('getGameFromTwitch', function (game: string, cb) {
         sendGameFromTwitch(game).then((data) => cb(data));
       });
       socket.on('getUserTwitchGames', async (cb) => {
-        let titles = await getRepository(CacheTitles).find();
-        const cachedGames = await getRepository(CacheGames).find();
+        let titles = await AppDataSource.getRepository(CacheTitles).find();
+        const cachedGames = await AppDataSource.getRepository(CacheGames).find();
 
         // we need to cleanup titles if game is not in cache
         for (const title of titles) {
           if (!cachedGames.map(o => o.name).includes(title.game)) {
-            await getRepository(CacheTitles).delete({ game: title.game });
+            await AppDataSource.getRepository(CacheTitles).delete({ game: title.game });
           }
         }
 
@@ -357,12 +335,12 @@ class Panel extends Core {
             thumbnail: await getGameThumbnailFromName(game.name) || '',
           });
         }
-        titles = await getRepository(CacheTitles).find();
+        titles = await AppDataSource.getRepository(CacheTitles).find();
         cb(titles, games);
       });
       socket.on('cleanupGameAndTitle', async () => {
       // remove empty titles
-        await getManager()
+        await AppDataSource
           .createQueryBuilder()
           .delete()
           .from(CacheTitles, 'titles')
@@ -370,12 +348,12 @@ class Panel extends Core {
           .execute();
 
         // remove duplicates
-        const allTitles = await getRepository(CacheTitles).find();
+        const allTitles = await AppDataSource.getRepository(CacheTitles).find();
         for (const t of allTitles) {
           const titles = allTitles.filter(o => o.game === t.game && o.title === t.title);
           if (titles.length > 1) {
           // remove title if we have more than one title
-            await getManager()
+            await AppDataSource
               .createQueryBuilder()
               .delete()
               .from(CacheTitles, 'titles')
@@ -385,8 +363,7 @@ class Panel extends Core {
         }
       });
       socket.on('updateGameAndTitle', async (data: { game: string, title: string, tags: string[] }, cb: (status: boolean | null) => void) => {
-        const status = await setTitleAndGame(data);
-        await setTags(data.tags);
+        const status = await updateChannelInfo(data);
 
         if (!status) { // twitch refused update
           cb(true);
@@ -395,25 +372,25 @@ class Panel extends Core {
         data.title = data.title.trim();
         data.game = data.game.trim();
 
-        const item = await getRepository(CacheTitles).findOne({
+        const item = await AppDataSource.getRepository(CacheTitles).findOneBy({
           game:  data.game,
           title: data.title,
         });
 
         if (!item) {
-          await getManager()
+          await AppDataSource
             .createQueryBuilder()
             .insert()
             .into(CacheTitles)
             .values([
               {
-                game: data.game, title: data.title, timestamp: Date.now(),
+                game: data.game, title: data.title, timestamp: Date.now(), tags: data.tags,
               },
             ])
             .execute();
         } else {
         // update timestamp
-          await getRepository(CacheTitles).save({ ...item, timestamp: Date.now() });
+          await AppDataSource.getRepository(CacheTitles).save({ ...item, timestamp: Date.now(), tags: data.tags });
         }
         cb(null);
       });
@@ -424,7 +401,7 @@ class Panel extends Core {
         tmiEmitter.emit('part', 'bot');
         // force all users offline
         await changelog.flush();
-        await getRepository(User).update({}, { isOnline: false });
+        await AppDataSource.getRepository(User).update({}, { isOnline: false });
       });
 
       // custom var
@@ -466,7 +443,7 @@ class Panel extends Core {
         _.remove(translateLib.custom, function (o: any) {
           return o.name === data.name;
         });
-        await getRepository(Translation).delete({ name: data.name });
+        await AppDataSource.getRepository(Translation).delete({ name: data.name });
         callback(translate(data.name));
       });
 
@@ -659,7 +636,7 @@ const sendStreamData = async () => {
       rawStatus:          rawStatus.value,
       currentSong:        lastfm.currentSong || ytCurrentSong || spotifyCurrentSong || translate('songs.not-playing'),
       currentWatched:     stats.value.currentWatchedTime,
-      tags:               currentStreamTags.value,
+      tags:               stats.value.currentTags ?? [],
     };
     ioServer?.emit('panel::stats', data);
   } catch (e: any) {

@@ -10,13 +10,13 @@ import {
   ChatClient, ChatCommunitySubInfo, ChatSubGiftInfo, ChatSubInfo, ChatUser,
 } from '@twurple/chat';
 import { isNil } from 'lodash';
-import { getRepository } from 'typeorm';
 
 import { default as apiClient } from './api/client';
 import { CustomAuthProvider } from './token/CustomAuthProvider.js';
 import { refresh } from './token/refresh';
 
 import { parserReply } from '~/commons';
+import { AppDataSource } from '~/database';
 import { timer } from '~/decorators';
 import {
   getFunctionList,
@@ -129,12 +129,14 @@ class Chat {
     }
     clearTimeout(this.timeouts[`initClient.${type}`]);
 
-    const isValidToken = variables.get(`services.twitch.botTokenValid`) && variables.get(`services.twitch.broadcasterTokenValid`);
+    const isValidToken = type === 'bot'
+      ? variables.get(`services.twitch.botTokenValid`)
+      : variables.get(`services.twitch.broadcasterTokenValid`);
     const channel = variables.get('services.twitch.broadcasterUsername') as string;
 
     // wait for initial validation
-    if (!isValidToken) {
-      setTimeout(() => this.initClient(type), 10 * constants.SECOND);
+    if (!isValidToken || channel.length === 0) {
+      this.timeouts[`initClient.${type}`] = setTimeout(() => this.initClient(type), 10 * constants.SECOND);
       return;
     }
 
@@ -164,7 +166,7 @@ class Chat {
         this.botWarning = true;
       }
       refresh(type).then(() => {
-        setTimeout(() => {
+        this.timeouts[`initClient.${type}`] = setTimeout(() => {
           this.initClient(type);
         }, 10000);
       });
@@ -632,7 +634,7 @@ class Chat {
   }
 
   @timer()
-  async subgift (recipient: string, subInfo: ChatSubGiftInfo, userstate: ChatUser) {
+  async subgift (recipient: string | null, subInfo: ChatSubGiftInfo, userstate: ChatUser) {
     try {
       const username = subInfo.gifter ?? '';
       const userId = subInfo.gifterUserId ?? '0';
@@ -643,9 +645,13 @@ class Chat {
       const ignoreGifts = (ignoreGiftsFromUser.get(userId) ?? 0);
       let isGiftIgnored = false;
 
+      if (!recipient) {
+        recipient = await users.getNameById(recipientId);
+      }
+      changelog.update(recipientId, { userId: recipientId, userName: recipient });
       const user = await changelog.get(recipientId);
+
       if (!user) {
-        changelog.update(recipientId, { userId: recipientId, userName: username });
         this.subgift(recipient, subInfo, userstate);
         return;
       }
@@ -747,7 +753,7 @@ class Chat {
         message:   messageFromUser,
         userId:    String(userId),
       };
-      await getRepository(UserBit).save(newBits);
+      await AppDataSource.getRepository(UserBit).save(newBits);
 
       eventEmitter.emit('cheer', {
         userName: username, userId, bits: bits, message: messageFromUser,
@@ -767,7 +773,7 @@ class Chat {
       let redeemTriggered = false;
       if (messageFromUser.trim().startsWith('!')) {
         try {
-          const price = await getRepository(Price).findOneOrFail({ where: { command: messageFromUser.trim().toLowerCase(), enabled: true } });
+          const price = await AppDataSource.getRepository(Price).findOneOrFail({ where: { command: messageFromUser.trim().toLowerCase(), enabled: true } });
           if (price.priceBits <= bits) {
             if (customcommands.enabled) {
               await customcommands.run({

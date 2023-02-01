@@ -16,10 +16,11 @@ export class CustomAuthProvider implements AuthProvider {
   ) {
     this.typeOfToken = type;
     this._accessToken = variables.get(`services.twitch.${this.typeOfToken}AccessToken`);
-    this._clientId = variables.get(`services.twitch.${this.typeOfToken}ClientId`);
+    this.updateClientId();
   }
 
   async getAccessToken(requestedScopes?: string[]): Promise<AccessToken | null> {
+    this.updateClientId();
     if (variables.get(`services.twitch.${this.typeOfToken}AccessToken`) === '') {
       return null;
     }
@@ -37,11 +38,25 @@ export class CustomAuthProvider implements AuthProvider {
     return this._accessToken;
   }
 
+  updateClientId() {
+    const tokenService = variables.get(`services.twitch.tokenService`);
+    switch (tokenService) {
+      case 'SogeBot Token Generator':
+        this._clientId = 't8cney2xkc7j4cu6zpv9ijfa27w027';
+        break;
+      case 'SogeBot Token Generator v2':
+        this._clientId = '89k6demxtifvq0vzgjpvr1mykxaqmf';
+        break;
+      default:
+        this._clientId = variables.get(`services.twitch.tokenServiceCustomClientId`);
+    }
+  }
+
   /**
 	 * The client ID.
 	 */
   get clientId(): string {
-    this._clientId = variables.get(`services.twitch.${this.typeOfToken}ClientId`);
+    this.updateClientId();
     return this._clientId;
   }
 

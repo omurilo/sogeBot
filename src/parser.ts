@@ -2,6 +2,7 @@ import * as constants from '@sogebot/ui-helpers/constants';
 import _ from 'lodash';
 import { v4 as uuid } from 'uuid';
 
+import { PermissionCommands } from '~/database/entity/permissions';
 import { timer } from '~/decorators.js';
 import { incrementCountOfCommandUsage } from '~/helpers/commands/count';
 import { getBotSender } from '~/helpers/commons';
@@ -10,12 +11,9 @@ import {
 } from '~/helpers/log';
 import { parserEmitter } from '~/helpers/parser/emitter';
 import { populatedList } from '~/helpers/parser/populatedList';
-import {
-  getCommandPermission,
-} from '~/helpers/permissions';
-import { check } from '~/helpers/permissions/index';
+import { getCommandPermission } from '~/helpers/permissions/getCommandPermission';
+import { check } from '~/helpers/permissions/check';
 import { translate } from '~/translate';
-import { permissionCommands } from '~/database/entity/permissions';
 
 parserEmitter.on('process', async (opts, cb) => {
   cb(await (new Parser(opts)).process());
@@ -255,7 +253,7 @@ class Parser {
     }
     commands = _(await Promise.all(commands)).flatMap().sortBy(o => -o.command.length).value();
     for (const command of commands) {
-      const permission = permissionCommands.find(cachedPermission => cachedPermission.id === command.id);
+      const permission = await PermissionCommands.findOneBy({ name: command.id });
       if (permission) {
         command.permission = permission.permission; // change to custom permission
         debug('parser.command', `Checking permission for ${command.id} - custom ${permission.name}`);

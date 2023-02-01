@@ -1,11 +1,11 @@
 import { setTimeout } from 'timers';
 
-import { isNil } from 'lodash';
-import { getRepository, IsNull } from 'typeorm';
+import { isNil, merge } from 'lodash';
+import { AppDataSource } from '~/database';
 
 import Core from '~/_interface';
 import {
-  Variable, VariableHistory, VariableInterface, VariableURL, VariableWatch,
+  Variable, VariableWatch,
 } from '~/database/entity/variable';
 import { onStartup } from '~/decorators/on';
 import { getBot } from '~/helpers/commons';
@@ -13,6 +13,7 @@ import { runScript, updateWidgetAndTitle } from '~/helpers/customvariables';
 import { csEmitter } from '~/helpers/customvariables/emitter';
 import { isDbConnected } from '~/helpers/database';
 import { adminEndpoint } from '~/helpers/socket';
+import { isValidationError } from './helpers/errors';
 
 class CustomVariables extends Core {
   timeouts: {
@@ -22,29 +23,29 @@ class CustomVariables extends Core {
   @onStartup()
   onStartup() {
     this.addMenu({
-      category: 'registry', name: 'customvariables', id: 'registry.customvariables', this: null,
+      category: 'registry', name: 'customvariables', id: 'registry/customvariables', this: null,
     });
     this.checkIfCacheOrRefresh();
   }
 
   sockets () {
     adminEndpoint('/core/customvariables', 'customvariables::list', async (cb) => {
-      const variables = await getRepository(Variable).find({ relations: ['history', 'urls'] });
+      const variables = await Variable.find();
       cb(null, variables);
     });
     adminEndpoint('/core/customvariables', 'customvariables::runScript', async (id, cb) => {
       try {
-        const item = await getRepository(Variable).findOne({ id: String(id) });
+        const item = await Variable.findOneBy({ id: String(id) });
         if (!item) {
           throw new Error('Variable not found');
         }
         const newCurrentValue = await runScript(item.evalValue, {
           sender: null, _current: item.currentValue, isUI: true,
         });
-        const runAt = Date.now();
-        cb(null, await getRepository(Variable).save({
-          ...item, currentValue: newCurrentValue, runAt,
-        }));
+        item.runAt = new Date().toISOString();
+        item.currentValue = newCurrentValue;
+
+        cb(null, await item.save());
       } catch (e: any) {
         cb(e.stack, null);
       }
@@ -63,13 +64,13 @@ class CustomVariables extends Core {
       cb(null, returnedValue);
     });
     adminEndpoint('/core/customvariables', 'customvariables::isUnique', async ({ variable, id }, cb) => {
-      cb(null, (await getRepository(Variable).find({ variableName: String(variable) })).filter(o => o.id !== id).length === 0);
+      cb(null, (await Variable.find({ where: { variableName: String(variable) } })).filter(o => o.id !== id).length === 0);
     });
     adminEndpoint('/core/customvariables', 'customvariables::delete', async (id, cb) => {
-      const item = await getRepository(Variable).findOne({ id: String(id) });
+      const item = await Variable.findOneBy({ id: String(id) });
       if (item) {
-        await getRepository(Variable).remove(item);
-        await getRepository(VariableWatch).delete({ variableId: String(id) });
+        await Variable.remove(item);
+        await AppDataSource.getRepository(VariableWatch).delete({ variableId: String(id) });
         updateWidgetAndTitle();
       }
       if (cb) {
@@ -78,33 +79,19 @@ class CustomVariables extends Core {
     });
     adminEndpoint('/core/customvariables', 'customvariables::save', async (item, cb) => {
       try {
-        const savedItem = await getRepository(Variable).save(item);
-        // somehow this is not populated by save on sqlite
-        if (savedItem.urls) {
-          for (const url of savedItem.urls) {
-            await getRepository(VariableURL).save({
-              ...url,
-              variable: savedItem,
-            });
-          }
+        const itemToSave = new Variable();
+        merge(itemToSave, item);
+        await itemToSave.validateAndSave();
+        updateWidgetAndTitle(itemToSave.variableName);
+        csEmitter.emit('variable-changed', itemToSave.variableName);
+        cb(null, itemToSave.id);
+      } catch (e) {
+        if (e instanceof Error) {
+          cb(e.message, null);
         }
-        // somehow this is not populated by save on sqlite
-        if (savedItem.history) {
-          for (const history of savedItem.history) {
-            await getRepository(VariableHistory).save({
-              ...history,
-              variable: savedItem,
-            });
-          }
+        if (isValidationError(e)) {
+          cb(e, null);
         }
-        await getRepository(VariableHistory).delete({ variableId: IsNull() });
-        await getRepository(VariableURL).delete({ variableId: IsNull() });
-
-        updateWidgetAndTitle(savedItem.variableName);
-        csEmitter.emit('variable-changed', savedItem.variableName);
-        cb(null, savedItem.id);
-      } catch (e: any) {
-        cb(e.stack, null);
       }
     });
   }
@@ -116,19 +103,19 @@ class CustomVariables extends Core {
     }
 
     clearTimeout(this.timeouts[`${this.constructor.name}.checkIfCacheOrRefresh`]);
-    const items = await getRepository(Variable).find({ type: 'eval' });
+    const items = await Variable.find({ where: { type: 'eval' } });
 
-    for (const item of items as Required<VariableInterface>[]) {
+    for (const item of items) {
       try {
-        item.runAt = isNil(item.runAt) ? 0 : item.runAt;
+        item.runAt = isNil(item.runAt) ? new Date().toISOString() : item.runAt;
         const shouldRun = item.runEvery > 0 && Date.now() - new Date(item.runAt).getTime() >= item.runEvery;
         if (shouldRun) {
           const newValue = await runScript(item.evalValue, {
             _current: item.currentValue, sender: getBot(), isUI: false,
           });
-          item.runAt = Date.now();
+          item.runAt = new Date().toISOString();
           item.currentValue = newValue;
-          await getRepository(Variable).save(item);
+          await Variable.save(item);
           await updateWidgetAndTitle(item.variableName);
         }
       } catch (e: any) {

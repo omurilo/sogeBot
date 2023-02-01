@@ -1,29 +1,36 @@
 import { setTimeout } from 'timers';
 
-import { HOUR } from '@sogebot/ui-helpers/constants';
-import {
-  Brackets, FindOneOptions, getConnection, getRepository, IsNull,
-} from 'typeorm';
-
-import client from './services/twitch/api/client';
-
 import Core from '~/_interface';
+import { AppDataSource } from '~/database';
 import { Permissions } from '~/database/entity/permissions';
 import {
   User, UserBit, UserInterface, UserTip,
 } from '~/database/entity/user';
 import { onStartup } from '~/decorators/on';
+
+import { HOUR } from '@sogebot/ui-helpers/constants';
+
 import { isStreamOnline, stats } from '~/helpers/api';
+
+import {
+  Brackets, FindOneOptions, IsNull,
+} from 'typeorm';
+
 import { mainCurrency } from '~/helpers/currency';
 import exchange from '~/helpers/currency/exchange';
 import rates from '~/helpers/currency/rates';
 import {
   debug, error, isDebugEnabled,
 } from '~/helpers/log';
-import { defaultPermissions, getUserHighestPermission } from '~/helpers/permissions/index';
 import { adminEndpoint, viewerEndpoint } from '~/helpers/socket';
 import * as changelog from '~/helpers/user/changelog.js';
+
+import { defaultPermissions } from './helpers/permissions/defaultPermissions';
+import { getUserHighestPermission } from './helpers/permissions/getUserHighestPermission';
+
 import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
+
+import client from './services/twitch/api/client';
 
 class Users extends Core {
   constructor () {
@@ -40,18 +47,22 @@ class Users extends Core {
   }
 
   async checkDuplicateUsernames() {
-    const connection = await getConnection();
     try {
       let query;
       await changelog.flush();
-      if (connection.options.type === 'postgres') {
-        query = getRepository(User).createQueryBuilder('user')
+
+      await AppDataSource.getRepository(User).delete({
+        userName: '__AnonymousUser__',
+      });
+
+      if (AppDataSource.options.type === 'postgres') {
+        query = AppDataSource.getRepository(User).createQueryBuilder('user')
           .select('COUNT(*)')
           .addSelect('"user"."userName"')
           .groupBy('"user"."userName"')
           .having('COUNT(*) > 1');
       } else {
-        query = getRepository(User).createQueryBuilder('user')
+        query = AppDataSource.getRepository(User).createQueryBuilder('user')
           .select('COUNT(*)', 'count')
           .addSelect('user.userName')
           .groupBy('user.userName')
@@ -61,7 +72,7 @@ class Users extends Core {
       const clientBot = await client('bot');
       await Promise.all(viewers.map(async (duplicate) => {
         const userName = duplicate.user_username;
-        const duplicates = await getRepository(User).find({ userName });
+        const duplicates = await AppDataSource.getRepository(User).find({ where: { userName } });
         await Promise.all(duplicates.map(async (user) => {
           try {
             const getUserById = await clientBot.users.getUserById(user.userId);
@@ -73,9 +84,9 @@ class Users extends Core {
               debug('users', `Duplicate username ${user.userName}#${user.userId} changed to ${getUserById.name}#${user.userId}`);
             }
           } catch (e: any) {
-            // we are tagging user as __AnonymousUser__, we don't want to get rid of all information
-            debug('users', `Duplicate username ${user.userName}#${user.userId} not found on Twitch => __AnonymousUser__#${user.userId}`);
-            changelog.update(user.userId, { userName: '__AnonymousUser__' });
+            // remove users not in Twitch anymore
+            debug('users', `Duplicate username ${user.userName}#${user.userId} not found on Twitch => '__inactive__${user.userName}#${user.userId}`);
+            changelog.update(user.userId, { userName: '__inactive__' + user.userName });
           }
         }));
       }));
@@ -116,26 +127,26 @@ class Users extends Core {
         // set all users offline on start
         debug('tmi.watched', `Setting all users as offline.`);
         await changelog.flush();
-        await getRepository(User).update({}, { isOnline: false });
+        await AppDataSource.getRepository(User).update({}, { isOnline: false });
       } else {
         // get new users
         await changelog.flush();
-        const newChatters = await getRepository(User).find({ isOnline: true, watchedTime: 0 });
+        const newChatters = await AppDataSource.getRepository(User).find({ where: { isOnline: true, watchedTime: 0 } });
         debug('tmi.watched', `Adding ${newChatters.length} users as new chatters.`);
         stats.value.newChatters = stats.value.newChatters + newChatters.length;
 
         if (isStreamOnline.value) {
           debug('tmi.watched', `Incrementing watchedTime by ${interval}`);
           await changelog.flush();
-          const incrementedUsers = await getRepository(User).increment({ isOnline: true }, 'watchedTime', interval);
+          const incrementedUsers = await AppDataSource.getRepository(User).increment({ isOnline: true }, 'watchedTime', interval);
           // chatTimeOnline + chatTimeOffline is solely use for points distribution
           debug('tmi.watched', `Incrementing chatTimeOnline by ${interval}`);
           await changelog.flush();
-          await getRepository(User).increment({ isOnline: true }, 'chatTimeOnline', interval);
+          await AppDataSource.getRepository(User).increment({ isOnline: true }, 'chatTimeOnline', interval);
 
           if (typeof incrementedUsers.affected === 'undefined') {
             await changelog.flush();
-            const users = await getRepository(User).find({ isOnline: true });
+            const users = await AppDataSource.getRepository(User).find({ where: { isOnline: true } });
             if (isDebugEnabled('tmi.watched')) {
               for (const user of users) {
                 debug('tmi.watched', `User ${user.userName}#${user.userId} added watched time ${interval}`);
@@ -148,7 +159,7 @@ class Users extends Core {
         } else {
           debug('tmi.watched', `Incrementing chatTimeOffline users by ${interval}`);
           await changelog.flush();
-          await getRepository(User).increment({ isOnline: true }, 'chatTimeOffline', interval);
+          await AppDataSource.getRepository(User).increment({ isOnline: true }, 'chatTimeOffline', interval);
         }
       }
     } catch (e: any) {
@@ -220,7 +231,7 @@ class Users extends Core {
       userName = userName.substring(1);
     }
     await changelog.flush();
-    const user = await getRepository(User).findOne({ where: { userName }, select: ['userId'] });
+    const user = await AppDataSource.getRepository(User).findOneBy({ userName });
     if (!user) {
       const userId = await getIdFromTwitch(userName);
       changelog.update(userId, { userName });
@@ -231,7 +242,7 @@ class Users extends Core {
 
   async getUserByUsername(userName: string, select?: FindOneOptions<Readonly<Required<UserInterface>>>['select']) {
     await changelog.flush();
-    const userByUsername = await getRepository(User).findOne({ where: { userName }, select });
+    const userByUsername = await AppDataSource.getRepository(User).findOneBy({ userName });
 
     if (userByUsername) {
       return userByUsername;
@@ -247,40 +258,40 @@ class Users extends Core {
   sockets () {
     adminEndpoint('/core/users', 'viewers::resetPointsAll', async (cb) => {
       await changelog.flush();
-      await getRepository(User).update({}, { points: 0 });
+      await AppDataSource.getRepository(User).update({}, { points: 0 });
       if (cb) {
         cb(null);
       }
     });
     adminEndpoint('/core/users', 'viewers::resetMessagesAll', async (cb) => {
       await changelog.flush();
-      await getRepository(User).update({}, { messages: 0, pointsByMessageGivenAt: 0 });
+      await AppDataSource.getRepository(User).update({}, { messages: 0, pointsByMessageGivenAt: 0 });
       if (cb) {
         cb(null);
       }
     });
     adminEndpoint('/core/users', 'viewers::resetWatchedTimeAll', async (cb) => {
       await changelog.flush();
-      await getRepository(User).update({}, { watchedTime: 0 });
+      await AppDataSource.getRepository(User).update({}, { watchedTime: 0 });
       if (cb) {
         cb(null);
       }
     });
     adminEndpoint('/core/users', 'viewers::resetSubgiftsAll', async (cb) => {
       await changelog.flush();
-      await getRepository(User).update({}, { giftedSubscribes: 0 });
+      await AppDataSource.getRepository(User).update({}, { giftedSubscribes: 0 });
       if (cb) {
         cb(null);
       }
     });
     adminEndpoint('/core/users', 'viewers::resetBitsAll', async (cb) => {
-      await getRepository(UserBit).clear();
+      await AppDataSource.getRepository(UserBit).clear();
       if (cb) {
         cb(null);
       }
     });
     adminEndpoint('/core/users', 'viewers::resetTipsAll', async (cb) => {
-      await getRepository(UserTip).clear();
+      await AppDataSource.getRepository(UserTip).clear();
       if (cb) {
         cb(null);
       }
@@ -297,7 +308,7 @@ class Users extends Core {
             if (typeof tip.id === 'string') {
               delete tip.id; // remove tip id as it is string (we are expecting number -> autoincrement)
             }
-            await getRepository(UserTip).save({ ...tip, userId });
+            await AppDataSource.getRepository(UserTip).save({ ...tip, userId });
           }
           cb(null);
           return;
@@ -308,7 +319,7 @@ class Users extends Core {
             if (typeof bit.id === 'string') {
               delete bit.id; // remove bit id as it is string (we are expecting number -> autoincrement)
             }
-            await getRepository(UserBit).save({ ...bit, userId });
+            await AppDataSource.getRepository(UserBit).save({ ...bit, userId });
           }
           cb(null);
           return;
@@ -320,8 +331,8 @@ class Users extends Core {
 
         changelog.update(userId, update);
         // as cascade remove set ID as null, we need to get rid of tips/bits
-        await getRepository(UserTip).delete({ userId: IsNull() });
-        await getRepository(UserBit).delete({ userId: IsNull() });
+        await AppDataSource.getRepository(UserTip).delete({ userId: IsNull() });
+        await AppDataSource.getRepository(UserBit).delete({ userId: IsNull() });
         cb(null);
       } catch (e: any) {
         cb(e.stack);
@@ -330,9 +341,9 @@ class Users extends Core {
     adminEndpoint('/core/users', 'viewers::remove', async (userId, cb) => {
       try {
         await changelog.flush();
-        await getRepository(UserTip).delete({ userId });
-        await getRepository(UserBit).delete({ userId });
-        await getRepository(User).delete({ userId });
+        await AppDataSource.getRepository(UserTip).delete({ userId });
+        await AppDataSource.getRepository(UserBit).delete({ userId });
+        await AppDataSource.getRepository(User).delete({ userId });
         cb(null);
       } catch (e: any) {
         error(e);
@@ -348,7 +359,6 @@ class Users extends Core {
     });
     adminEndpoint('/core/users', 'find.viewers', async (opts, cb) => {
       try {
-        const connection = await getConnection();
         opts.page = opts.page ?? 0;
         opts.perPage = opts.perPage ?? 25;
         if (opts.perPage === -1) {
@@ -364,8 +374,8 @@ class Users extends Core {
         */
         await changelog.flush();
         let query;
-        if (connection.options.type === 'postgres') {
-          query = getRepository(User).createQueryBuilder('user')
+        if (AppDataSource.options.type === 'postgres') {
+          query = AppDataSource.getRepository(User).createQueryBuilder('user')
             .orderBy(opts.order?.orderBy ?? 'user.userName' , opts.order?.sortOrder ?? 'ASC')
             .select('COALESCE("sumTips", 0)', 'sumTips')
             .addSelect('COALESCE("sumBits", 0)', 'sumBits')
@@ -375,7 +385,7 @@ class Users extends Core {
             .leftJoin('(select "userId", sum("amount") as "sumBits" from "user_bit" group by "userId")', 'user_bit', '"user_bit"."userId" = "user"."userId"')
             .leftJoin('(select "userId", sum("sortAmount") as "sumTips" from "user_tip" group by "userId")', 'user_tip', '"user_tip"."userId" = "user"."userId"');
         } else {
-          query = getRepository(User).createQueryBuilder('user')
+          query = AppDataSource.getRepository(User).createQueryBuilder('user')
             .orderBy(opts.order?.orderBy ?? 'user.userName' , opts.order?.sortOrder ?? 'ASC')
             .select('JSON_EXTRACT(`user`.`extra`, \'$.levels.xp\')', 'levelXP')
             .addSelect('COALESCE(sumTips, 0)', 'sumTips')
@@ -389,17 +399,17 @@ class Users extends Core {
 
         if (typeof opts.order !== 'undefined') {
           if (opts.order.orderBy === 'level') {
-            if (connection.options.type === 'better-sqlite3') {
+            if (AppDataSource.options.type === 'better-sqlite3') {
               query.orderBy('LENGTH("levelXP")', opts.order.sortOrder);
               query.addOrderBy('"levelXP"', opts.order.sortOrder);
-            } else if (connection.options.type === 'postgres') {
+            } else if (AppDataSource.options.type === 'postgres') {
               query.orderBy('length(COALESCE(JSON_EXTRACT_PATH("extra"::json, \'levels\'), \'{}\')::text)', opts.order.sortOrder);
               query.addOrderBy('COALESCE(JSON_EXTRACT_PATH("extra"::json, \'levels\'), \'{}\')::text', opts.order.sortOrder);
             } else {
               query.orderBy('LENGTH(`levelXP`)', opts.order.sortOrder);
               query.addOrderBy('`levelXP`', opts.order.sortOrder);
             }
-          } else if (connection.options.type === 'postgres') {
+          } else if (AppDataSource.options.type === 'postgres') {
             opts.order.orderBy = opts.order.orderBy.split('.').map(o => `"${o}"`).join('.');
             query.orderBy(opts.order.orderBy, opts.order.sortOrder);
 
@@ -411,7 +421,7 @@ class Users extends Core {
         if (typeof opts.filter !== 'undefined') {
           for (const filter of opts.filter) {
             query.andWhere(new Brackets(w => {
-              if (connection.options.type === 'postgres') {
+              if (AppDataSource.options.type === 'postgres') {
                 if (filter.operation === 'contains') {
                   w.where(`CAST("user"."${filter.columnName}" AS TEXT) like :${filter.columnName}`, { [filter.columnName]: `%${filter.value}%` });
                 } else if (filter.operation === 'equal') {
@@ -476,18 +486,18 @@ class Users extends Core {
         cb(e.stack, [], 0, null);
       }
     });
-    viewerEndpoint('/core/users', 'viewers::findOne', async (userId, cb) => {
+    viewerEndpoint('/core/users', 'viewers::findOneBy', async (userId, cb) => {
       try {
         const viewer = await changelog.get(userId);
-        const tips =  await getRepository(UserTip).find({ where: { userId } });
-        const bits =  await getRepository(UserBit).find({ where: { userId } });
+        const tips =  await AppDataSource.getRepository(UserTip).find({ where: { userId } });
+        const bits =  await AppDataSource.getRepository(UserBit).find({ where: { userId } });
 
         if (viewer) {
           const aggregatedTips = tips.map((o) => exchange(o.amount, o.currency, mainCurrency.value)).reduce((a, b) => a + b, 0);
           const aggregatedBits = bits.map((o) => Number(o.amount)).reduce((a, b) => a + b, 0);
 
           const permId = await getUserHighestPermission(userId);
-          const permissionGroup = await Permissions.findOneOrFail({ where: { id: permId || defaultPermissions.VIEWERS } });
+          const permissionGroup = await Permissions.findOneByOrFail({ id: permId || defaultPermissions.VIEWERS });
           cb(null, {
             ...viewer, aggregatedBits, aggregatedTips, permission: permissionGroup, tips, bits,
           });

@@ -1,6 +1,6 @@
 const _ = require('lodash');
-const { getRepository } = require('typeorm');
 const { v4: uuidv4 } = require('uuid');
+const { AppDataSource } = require('../../../dest/database.js');
 
 require('../../general.js');
 
@@ -8,7 +8,7 @@ const { Commands, CommandsResponses } = require('../../../dest/database/entity/c
 const { Event } = require('../../../dest/database/entity/event');
 const { User } = require('../../../dest/database/entity/user');
 const events = (require('../../../dest/events')).default;
-const { defaultPermissions } = (require('../../../dest/helpers/permissions/'));
+const { defaultPermissions } = (require('../../../dest/helpers/permissions/defaultPermissions'));
 const { isBotSubscriber } = require('../../../dest/helpers/user/isBot');
 const alias = (require('../../../dest/systems/alias')).default;
 const commercial = (require('../../../dest/systems/commercial')).default;
@@ -40,7 +40,7 @@ describe('Events - event run command should correctly parse filters and be able 
         isCommandQuiet: false,
       },
     }];
-    await getRepository(Event).save(event);
+    await AppDataSource.getRepository(Event).save(event);
 
     const command = new Commands();
     command.id =        '1a945d76-2d3c-4c7a-ae03-e0daf17142c5';

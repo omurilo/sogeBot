@@ -1,7 +1,14 @@
+import type { HelixChatAnnoucementColor } from '@twurple/api';
 import _ from 'lodash';
 
 import { timer } from '../../decorators.js';
+
+import client from '~/services/twitch/api/client.js';
+
 import { Message } from '../../message';
+
+import { variables } from '~/watchers.js';
+
 import {
   chatOut, debug, whisperOut,
 } from '../log';
@@ -10,6 +17,15 @@ import {
 } from '../tmi';
 
 import { getBotSender } from '.';
+
+const getAnnouncementColor = (command: string): HelixChatAnnoucementColor => {
+  const color = command.replace('/announce', '');
+  if (color.trim().length === 0) {
+    return 'primary';
+  } else {
+    return color.trim() as HelixChatAnnoucementColor;
+  }
+};
 
 // exposing functions to @timer decorator
 class HelpersCommons {
@@ -24,6 +40,9 @@ class HelpersCommons {
     isWhisper?: boolean;
     [x: string]: any;
   }, id?: string) {
+    if (id === 'null') {
+      id = undefined;
+    }
     messageToSend = await messageToSend as string; // await if messageToSend is promise (like prepare)
     attr = attr || {};
     sender = sender || null;
@@ -76,7 +95,27 @@ class HelpersCommons {
           if (sendWithMe.value && !messageToSend.startsWith('/')) {
             message('me', sender.userName, messageToSend, id);
           } else {
-            message('say', sender.userName, messageToSend, id);
+            if (messageToSend.startsWith('/announce')) {
+              // get color
+              const [ announce, ...messageArray ] = messageToSend.split(' ');
+
+              const botCurrentScopes = variables.get('services.twitch.botCurrentScopes') as string[];
+              if (!botCurrentScopes.includes('moderator:manage:announcements')) {
+                message('say', sender.userName, 'Bot is missing moderator:manage:announcements scope, please reauthorize in dashboard.', id);
+                return true;
+              }
+
+              const clientBot = await client('bot');
+              const broadcasterId = variables.get('services.twitch.broadcasterId') as string;
+              const botId = variables.get('services.twitch.botId') as string;
+              const color = getAnnouncementColor(announce);
+              clientBot.chat.sendAnnouncement(broadcasterId, botId, {
+                message: messageArray.join(' '),
+                color,
+              });
+            } else {
+              message('say', sender.userName, messageToSend, id);
+            }
           }
         }
       }

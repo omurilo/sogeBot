@@ -13,7 +13,7 @@ export interface EventListInterface {
   values_json: string;
 }
 
-export const EventList = new EntitySchema<Readonly<Required<EventListInterface>>>({
+export const EventList = new EntitySchema<Required<EventListInterface>>({
   name:    'event_list',
   columns: {
     id: {

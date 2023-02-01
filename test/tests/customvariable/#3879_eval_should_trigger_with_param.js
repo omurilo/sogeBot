@@ -1,6 +1,6 @@
 /* global describe it before */
 
-const { defaultPermissions } = require('../../../dest/helpers/permissions/');
+const { defaultPermissions } = require('../../../dest/helpers/permissions/defaultPermissions');
 const Parser = require('../../../dest/parser').default;
 
 require('../../general.js');
@@ -13,8 +13,8 @@ const user = require('../../general.js').user;
 const assert = require('assert');
 const _ = require('lodash');
 
-const { getRepository } = require('typeorm');
 const { Variable } = require('../../../dest/database/entity/variable');
+const { AppDataSource } = require('../../../dest/database');
 
 // stub
 _.set(global, 'widgets.custom_variables.io.emit', function () {
@@ -34,16 +34,17 @@ describe('Custom Variable - #3879 - Eval should trigger with param with proper p
   });
 
   it(`Create eval $_variable to return param`, async () => {
-    await getRepository(Variable).save({
+    await new Variable({
       variableName: '$_variable',
       readOnly: false,
       currentValue: '0',
       type: 'eval',
       responseType: 2,
+      runEvery: 0,
       permission: defaultPermissions.MODERATORS,
       evalValue: 'return param || "no param sent";',
       usableOptions: [],
-    });
+    }).save();
   });
 
   describe('!_test 4 by owner', () => {

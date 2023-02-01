@@ -1,26 +1,26 @@
 /* global describe it before */
 
 const assert = require('assert');
+const { AppDataSource } = require('../../../dest/database');
 
-const { getRepository } = require('typeorm');
 const v4 = require('uuid').v4;
 
-const { Variable, VariableURL } = require('../../../dest/database/entity/variable');
+const { Variable } = require('../../../dest/database/entity/variable');
 const getURL = require('../../../dest/helpers/customvariables/getURL').getURL;
-const { defaultPermissions } = require('../../../dest/helpers/permissions');
+const { defaultPermissions } = require('../../../dest/helpers/permissions/defaultPermissions');
 require('../../general.js');
 const db = require('../../general.js').db;
 const message = require('../../general.js').message;
 
 describe('Custom Variable - helpers/customvariables/getURL - @func1', () => {
-  let urlId;
-  let urlIdWithoutGET;
+  let urlId = v4();
+  let urlIdWithoutGET = v4();
 
   before(async () => {
     await db.cleanup();
     await message.prepare();
 
-    const variable = await getRepository(Variable).save({
+    await new Variable({
       variableName: '$_variable',
       readOnly: false,
       currentValue: '0',
@@ -29,9 +29,11 @@ describe('Custom Variable - helpers/customvariables/getURL - @func1', () => {
       permission: defaultPermissions.VIEWERS,
       evalValue: '',
       usableOptions: [],
-    });
-    urlId = (await getRepository(VariableURL).save({ GET: true, POST: false, showResponse: false, variableId: variable.id })).id;
-    urlIdWithoutGET = (await getRepository(VariableURL).save({ GET: false, POST: false, showResponse: false, variableId: variable.id })).id;
+      urls: [
+        { GET: true, POST: false, showResponse: false, id: urlId },
+        { GET: false, POST: false, showResponse: false, id: urlIdWithoutGET }
+      ]
+    }).save();
   });
 
   it ('with enabled GET', async () => {

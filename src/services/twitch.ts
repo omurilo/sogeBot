@@ -3,8 +3,17 @@ import { User } from '@entity/user';
 import { SECOND } from '@sogebot/ui-helpers/constants';
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
 import { getTime } from '@sogebot/ui-helpers/getTime';
-import { getRepository } from 'typeorm';
+import { capitalize } from 'lodash';
 
+import Service from './_interface';
+import { init as apiIntervalInit, stop as apiIntervalStop } from './twitch/api/interval';
+import { createClip } from './twitch/calls/createClip';
+import { createMarker } from './twitch/calls/createMarker';
+import Chat from './twitch/chat';
+import EventSub from './twitch/eventsub';
+import PubSub from './twitch/pubsub';
+import { cleanErrors } from './twitch/token/refresh';
+import { cache, validate } from './twitch/token/validate';
 import {
   command, default_permission, example, persistent, settings,
 } from '../decorators';
@@ -13,32 +22,23 @@ import Expects from '../expects';
 import emitter from '../helpers/interfaceEmitter';
 import { debug, error, info } from '../helpers/log';
 import users from '../users';
-import Service from './_interface';
-import { init as apiIntervalInit , stop as apiIntervalStop } from './twitch/api/interval';
-import { createClip } from './twitch/calls/createClip';
-import { createMarker } from './twitch/calls/createMarker';
-import Chat from './twitch/chat';
-import EventSub from './twitch/eventsub';
-import { eventErrorShown } from './twitch/eventsub';
-import PubSub from './twitch/pubsub';
-import { cleanErrors } from './twitch/token/refresh';
-import { cache, validate } from './twitch/token/validate';
 
+import { AppDataSource } from '~/database';
 import {
   isStreamOnline, stats, streamStatusChangeSince,
 } from '~/helpers/api';
 import { prepare } from '~/helpers/commons/prepare';
 import { isBotStarted } from '~/helpers/database';
-import { defaultPermissions } from '~/helpers/permissions/index';
+import defaultPermissions from '~/helpers/permissions/defaultPermissions';
 import { adminEndpoint } from '~/helpers/socket';
 import {
   ignorelist, sendWithMe, setMuteStatus, showWithAt,
+  tmiEmitter,
 } from '~/helpers/tmi';
-import { tmiEmitter } from '~/helpers/tmi';
 import * as changelog from '~/helpers/user/changelog.js';
 import { isIgnored } from '~/helpers/user/isIgnored';
 import { sendGameFromTwitch } from '~/services/twitch/calls/sendGameFromTwitch';
-import { setTitleAndGame } from '~/services/twitch/calls/setTitleAndGame';
+import { updateChannelInfo } from '~/services/twitch/calls/updateChannelInfo';
 import { translate } from '~/translate';
 import { capitalize } from 'lodash';
 
@@ -76,11 +76,6 @@ class Twitch extends Service {
     mute = false;
   @settings('chat')
     whisperListener = false;
-
-  @settings('bot')
-    botClientId = '';
-  @settings('broadcaster')
-    broadcasterClientId = '';
 
   @settings('general')
     tokenService: keyof typeof urls = 'SogeBot Token Generator';
@@ -143,20 +138,19 @@ class Twitch extends Service {
   @settings('bot')
     botCurrentScopes: string[] = [];
 
-  @settings('eventsub')
-    useTunneling = false;
-  @settings('eventsub')
-    domain = '';
-  @settings('eventsub')
-    eventSubClientId = '';
-  @settings('eventsub')
-    eventSubClientSecret = '';
-  @settings('eventsub')
-    eventSubEnabledSubscriptions: string[] = [];
-  @persistent()
-    appToken = '';
-  @persistent()
-    secret = '';
+  @onChange('botCurrentScopes')
+  onChangeBotScopes() {
+    if (this.botCurrentScopes.length > 0) {
+      info('TWITCH: Bot scopes ' + this.botCurrentScopes.join(', '));
+    }
+  }
+
+  @onChange('broadcasterCurrentScopes')
+  onChangeBroadcasterScopes() {
+    if (this.broadcasterCurrentScopes.length > 0) {
+      info('TWITCH: Broadcaster scopes ' + this.broadcasterCurrentScopes.join(', '));
+    }
+  }
 
   constructor() {
     super();
@@ -219,10 +213,8 @@ class Twitch extends Service {
     cleanErrors('broadcaster');
   }
 
-  @onChange('botAccessToken')
-  @onChange('broadcasterAccessToken')
-  @onLoad('broadcasterAccessToken')
-  @onLoad('botAccessToken')
+  @onChange(['botAccessToken', 'broadcasterAccessToken'])
+  @onLoad(['botAccessToken', 'broadcasterAccessToken'])
   public async onChangeAccessToken(key: string, value: any) {
     if (!this.enabled) {
       return;
@@ -275,14 +267,35 @@ class Twitch extends Service {
   init() {
     if (this.botTokenValid && this.broadcasterTokenValid) {
       this.tmi = new Chat();
-      this.tmi?.initClient('bot');
-      this.tmi?.initClient('broadcaster');
-
-      this.pubsub = new PubSub();
-      this.eventsub = new EventSub();
       apiIntervalInit();
     } else {
       setTimeout(() => this.init(), 1000);
+    }
+  }
+
+  @onChange(['botTokenValid', 'botAccessToken'])
+  onBotTokenValidChange() {
+    if (this.botTokenValid && this.botAccessToken.length > 0) {
+      if (this.tmi) {
+        this.tmi.initClient('bot');
+      } else {
+        setTimeout(() => this.onBotTokenValidChange(), 1000);
+      }
+    }
+  }
+
+  @onChange(['broadcasterTokenValid', 'broadcasterAccessToken'])
+  onBroadcasterTokenValidChange() {
+    this.pubsub = null;
+    this.eventsub = null;
+    if (this.broadcasterTokenValid && this.broadcasterAccessToken.length > 0) {
+      if (this.tmi) {
+        this.tmi.initClient('broadcaster');
+        this.pubsub = new PubSub();
+        this.eventsub = new EventSub();
+      } else {
+        setTimeout(() => this.onBroadcasterTokenValidChange(), 1000);
+      }
     }
   }
 
@@ -345,10 +358,6 @@ class Twitch extends Service {
   }
 
   sockets() {
-    adminEndpoint('/services/twitch', 'eventsub::reset', () => {
-      info('EVENTSUB: user authorized, resetting state of eventsub subscriptions.');
-      eventErrorShown.clear();
-    });
     adminEndpoint('/services/twitch', 'broadcaster', (cb) => {
       try {
         cb(null, (this.broadcasterUsername).toLowerCase());
@@ -376,11 +385,26 @@ class Twitch extends Service {
       cb(null);
     });
     adminEndpoint('/services/twitch', 'twitch::token', async ({ accessToken, refreshToken, accountType }, cb) => {
-      emitter.emit('set', '/services/twitch', `tokenService`, this.tokenService);
+      emitter.emit('set', '/services/twitch', `tokenService`, 'SogeBot Token Generator v2');
       emitter.emit('set', '/services/twitch', `${accountType}RefreshToken`, refreshToken);
       emitter.emit('set', '/services/twitch', `${accountType}AccessToken`, accessToken);
-      await validate(accountType);
-      cb(null);
+      emitter.emit('set', '/services/twitch', `${accountType}TokenValid`, true);
+      await validate(accountType, 0, true);
+      setTimeout(async () => {
+        cb(null);
+      }, 1000);
+    });
+    adminEndpoint('/services/twitch', 'twitch::token::ownApp', async ({ accessToken, refreshToken, accountType, clientId, clientSecret }, cb) => {
+      emitter.emit('set', '/services/twitch', `tokenService`, 'Own Twitch App');
+      emitter.emit('set', '/services/twitch', `${accountType}AccessToken`, accessToken);
+      emitter.emit('set', '/services/twitch', `${accountType}RefreshToken`, refreshToken);
+      emitter.emit('set', '/services/twitch', `tokenServiceCustomClientId`, clientId);
+      emitter.emit('set', '/services/twitch', `tokenServiceCustomClientSecret`, clientSecret);
+      emitter.emit('set', '/services/twitch', `${accountType}TokenValid`, true);
+      await validate(accountType, 0, true);
+      setTimeout(async () => {
+        cb(null);
+      }, 1000);
     });
   }
 
@@ -488,7 +512,7 @@ class Twitch extends Service {
 
   @command('!followers')
   async followers (opts: CommandOptions) {
-    const events = await getRepository(EventList)
+    const events = await AppDataSource.getRepository(EventList)
       .createQueryBuilder('events')
       .select('events')
       .orderBy('events.timestamp', 'DESC')
@@ -511,7 +535,7 @@ class Twitch extends Service {
 
   @command('!subs')
   async subs (opts: CommandOptions) {
-    const events = await getRepository(EventList)
+    const events = await AppDataSource.getRepository(EventList)
       .createQueryBuilder('events')
       .select('events')
       .orderBy('events.timestamp', 'DESC')
@@ -520,7 +544,7 @@ class Twitch extends Service {
       .orWhere('events.event = :event3', { event3: 'subgift' })
       .getMany();
     await changelog.flush();
-    const onlineSubscribers = (await getRepository(User).createQueryBuilder('user')
+    const onlineSubscribers = (await AppDataSource.getRepository(User).createQueryBuilder('user')
       .where('user.userName != :botusername', { botusername: this.botUsername.toLowerCase() })
       .andWhere('user.userName != :broadcasterusername', { broadcasterusername: this.broadcasterUsername.toLowerCase() })
       .andWhere('user.isSubscriber = :isSubscriber', { isSubscriber: true })
@@ -555,7 +579,7 @@ class Twitch extends Service {
     if (opts.parameters.length === 0) {
       return [ { response: await translate('title.current').replace(/\$title/g, stats.value.currentTitle || 'n/a'), ...opts }];
     }
-    const status = await setTitleAndGame({ title: opts.parameters });
+    const status = await updateChannelInfo({ title: opts.parameters });
     return status ? [ { response: status.response, ...opts } ] : [];
   }
 
@@ -600,7 +624,7 @@ class Twitch extends Service {
     const games = await sendGameFromTwitch(opts.parameters);
     if (Array.isArray(games) && games.length > 0) {
       const exactMatchIdx = games.findIndex(name => name.toLowerCase() === opts.parameters.toLowerCase());
-      const status = await setTitleAndGame({ game: games[exactMatchIdx !== -1 ? exactMatchIdx : 0] });
+      const status = await updateChannelInfo({ game: games[exactMatchIdx !== -1 ? exactMatchIdx : 0] });
       return status ? [ { response: status.response, ...opts } ] : [];
     }
     return [{ response: translate('game.current').replace(/\$title/g, stats.value.currentGame || 'n/a'), ...opts }];

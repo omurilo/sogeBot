@@ -1,35 +1,36 @@
+import type { Filter } from '@devexpress/dx-react-grid';
 import {
   currentSongType,
   SongBan, SongPlaylist, SongRequest,
 } from '@entity/song';
 import { User } from '@entity/user';
 import * as _ from 'lodash';
+import shortid from 'shortid';
 import io from 'socket.io';
 import {
-  Brackets, getConnection, getRepository, In, Like,
+  Brackets, In, Like,
 } from 'typeorm';
 import ytdl from 'ytdl-core';
 import ytpl from 'ytpl';
 import ytsr from 'ytsr';
 
+import System from './_interface';
 import {
   command, default_permission, persistent, settings, ui,
 } from '../decorators';
 import { onChange, onStartup } from '../decorators/on';
-import System from './_interface';
 
+import { AppDataSource } from '~/database';
 import {
   announce, getBot, getBotSender, prepare,
 } from '~/helpers/commons';
 import { error, info } from '~/helpers/log';
-import { defaultPermissions } from '~/helpers/permissions/index';
+import defaultPermissions from '~/helpers/permissions/defaultPermissions';
 import { adminEndpoint, publicEndpoint } from '~/helpers/socket';
 import { tmiEmitter } from '~/helpers/tmi';
 import * as changelog from '~/helpers/user/changelog.js';
 import { isModerator } from '~/helpers/user/isModerator';
 import { translate } from '~/translate';
-import shortid from 'shortid';
-import { Filter } from '@devexpress/dx-react-grid';
 
 let importInProgress = false;
 const cachedTags = new Set<string>();
@@ -125,7 +126,6 @@ class Songs extends System {
       }
     });
     publicEndpoint('/systems/songs', 'find.playlist', async (opts: { filters?: Filter[], page: number, search?: string, tag?: string | null, perPage: number}, cb) => {
-      const connection = await getConnection();
       opts.page = opts.page ?? 0;
       opts.perPage = opts.perPage ?? 25;
 
@@ -145,7 +145,7 @@ class Songs extends System {
             for (let i = 0; i < filter.value.length; i++) {
               const name2 = shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.');
               const value = filter.value[i];
-              if  (['postgres'].includes(connection.options.type.toLowerCase())) {
+              if  (['postgres'].includes(AppDataSource.options.type.toLowerCase())) {
                 w[i === 0 ? 'where' : 'orWhere'](`"playlist"."${filter.columnName}" like :${name2}`, { [name2]: `%${value}%` });
               } else {
                 w[i === 0 ? 'where' : 'orWhere'](`playlist.${filter.columnName} like :${name2}`, { [name2]: `%${value}%` });
@@ -155,21 +155,21 @@ class Songs extends System {
         }
 
         if (filter.operation === 'contains') {
-          if  (['postgres'].includes(connection.options.type.toLowerCase())) {
+          if  (['postgres'].includes(AppDataSource.options.type.toLowerCase())) {
             query.andWhere(`"playlist"."${filter.columnName}" like :${name}`, { [name]: `%${filter.value}%` });
           } else {
             query.andWhere(`playlist.${filter.columnName} like :${name}`, { [name]: `%${filter.value}%` });
           }
         }
         if (filter.operation === 'equal') {
-          if  (['postgres'].includes(connection.options.type.toLowerCase())) {
+          if  (['postgres'].includes(AppDataSource.options.type.toLowerCase())) {
             query.andWhere(`"playlist"."${filter.columnName}" = :${name}`, { [name]: `${filter.value}` });
           } else {
             query.andWhere(`playlist.${filter.columnName} =:${name}`, { [name]: `${filter.value}` });
           }
         }
         if (filter.operation === 'notEqual') {
-          if  (['postgres'].includes(connection.options.type.toLowerCase())) {
+          if  (['postgres'].includes(AppDataSource.options.type.toLowerCase())) {
             query.andWhere(`"playlist"."${filter.columnName}" != :${name}`, { [name]: `${filter.value}` });
           } else {
             query.andWhere(`playlist.${filter.columnName} != :${name}`, { [name]: `${filter.value}` });
@@ -179,7 +179,7 @@ class Songs extends System {
 
       if (typeof opts.search !== 'undefined') {
         query.andWhere(new Brackets(w => {
-          if  (['postgres'].includes(connection.options.type.toLowerCase())) {
+          if  (['postgres'].includes(AppDataSource.options.type.toLowerCase())) {
             w.where('"playlist"."videoId" like :like', { like: `%${opts.search}%` });
             w.orWhere('"playlist"."title" like :like', { like: `%${opts.search}%` });
           } else {
@@ -191,7 +191,7 @@ class Songs extends System {
 
       if (opts.tag) {
         query.andWhere(new Brackets(w => {
-          if  (['postgres'].includes(connection.options.type.toLowerCase())) {
+          if  (['postgres'].includes(AppDataSource.options.type.toLowerCase())) {
             w.where('"playlist"."tags" like :tag', { tag: `%${opts.tag}%` });
           } else {
             w.where('playlist.tags like :tag', { tag: `%${opts.tag}%` });
@@ -350,12 +350,12 @@ class Songs extends System {
     }
 
     // send timeouts to all users who requested song
-    const request = (await SongRequest.find({ videoId: videoID })).map(o => o.username);
+    const request = (await SongRequest.findBy({ videoId: videoID })).map(o => o.username);
     if (JSON.parse(this.currentSong).videoId === videoID) {
       request.push(JSON.parse(this.currentSong).username);
     }
     await changelog.flush();
-    const users = await getRepository(User).find({ userName: In(request) });
+    const users = await AppDataSource.getRepository(User).findBy({ userName: In(request) });
     for (const username of request) {
       const data = users.find(o => o.userName === username);
       tmiEmitter.emit('timeout', username, 300, typeof data !== 'undefined' && isModerator(data));
@@ -425,9 +425,9 @@ class Songs extends System {
 
     // check if there are any requests
     if (this.songrequest) {
-      const sr = await SongRequest.findOne({ order: { addedAt: 'ASC' } });
-      if (sr) {
-        const currentSong: any = sr;
+      const sr = await SongRequest.find({ order: { addedAt: 'ASC' }, take: 1 });
+      if (sr[0]) {
+        const currentSong: any = sr[0];
         currentSong.volume = await this.getVolume(currentSong);
         currentSong.type = 'songrequests';
         this.currentSong = JSON.stringify(currentSong);
@@ -435,7 +435,7 @@ class Songs extends System {
         if (this.notify) {
           this.notifySong();
         }
-        await SongRequest.delete({ videoId: sr.videoId });
+        await SongRequest.delete({ videoId: sr[0].videoId });
         return [];
       }
     }
@@ -447,36 +447,36 @@ class Songs extends System {
         return [];
       }
       const order: any = this.shuffle ? { seed: 'ASC' } : { lastPlayedAt: 'ASC' };
-      const pl = await SongPlaylist.findOne({ order });
-      if (!pl) {
+      const pl = await SongPlaylist.find({ order, take: 1 });
+      if (!pl[0]) {
         return []; // don't do anything if no songs in playlist
       }
 
       // shuffled song is played again
-      if (this.shuffle && pl.seed === 1) {
+      if (this.shuffle && pl[0].seed === 1) {
         await this.createRandomSeeds();
         return this.sendNextSongID(); // retry with new seeds
       }
 
-      if (!pl.tags.includes(this.currentTag)) {
-        pl.seed = 1;
-        await pl.save();
+      if (!pl[0].tags.includes(this.currentTag)) {
+        pl[0].seed = 1;
+        await pl[0].save();
         return this.sendNextSongID(); // get next song as this don't belong to tag
       }
 
-      pl.seed = 1;
-      pl.lastPlayedAt = new Date().toISOString();
-      await pl.save();
+      pl[0].seed = 1;
+      pl[0].lastPlayedAt = new Date().toISOString();
+      await pl[0].save();
       const currentSong = {
-        videoId:     pl.videoId,
-        title:       pl.title,
+        videoId:     pl[0].videoId,
+        title:       pl[0].title,
         type:        'playlist',
         username:    getBot(),
-        forceVolume: pl.forceVolume,
-        loudness:    pl.loudness,
-        volume:      await this.getVolume(pl),
-        endTime:     pl.endTime,
-        startTime:   pl.startTime,
+        forceVolume: pl[0].forceVolume,
+        loudness:    pl[0].loudness,
+        volume:      await this.getVolume(pl[0]),
+        endTime:     pl[0].endTime,
+        startTime:   pl[0].startTime,
       };
       this.currentSong = JSON.stringify(currentSong);
 
@@ -612,7 +612,7 @@ class Songs extends System {
     }
 
     // is song banned?
-    const ban = await SongBan.findOne({ videoId: videoID });
+    const ban = await SongBan.findOneBy({ videoId: videoID });
     if (ban) {
       return [{ response: translate('songs.song-is-banned'), ...opts }];
     }
@@ -705,10 +705,10 @@ class Songs extends System {
 
     if (idsFromDB.includes(id)) {
       info(`=> Skipped ${id} - Already in playlist`);
-      return [{ response: prepare('songs.song-is-already-in-playlist', { name: (await SongPlaylist.findOneOrFail({ videoId: id })).title }), ...opts }];
+      return [{ response: prepare('songs.song-is-already-in-playlist', { name: (await SongPlaylist.findOneByOrFail({ videoId: id })).title }), ...opts }];
     } else if (banFromDb.includes(id)) {
       info(`=> Skipped ${id} - Song is banned`);
-      return [{ response: prepare('songs.song-is-banned', { name: (await SongPlaylist.findOneOrFail({ videoId: id })).title }), ...opts }];
+      return [{ response: prepare('songs.song-is-banned', { name: (await SongPlaylist.findOneByOrFail({ videoId: id })).title }), ...opts }];
     } else {
       const videoInfo = await ytdl.getInfo('https://www.youtube.com/watch?v=' + id);
       if (videoInfo) {
@@ -744,7 +744,7 @@ class Songs extends System {
     }
     const videoID = opts.parameters;
 
-    const song = await SongPlaylist.findOne({ videoId: videoID });
+    const song = await SongPlaylist.findOneBy({ videoId: videoID });
     if (song) {
       SongPlaylist.delete({ videoId: videoID });
       const response = prepare('songs.song-was-removed-from-playlist', { name: song.title });

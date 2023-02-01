@@ -2,12 +2,13 @@ import crypto from 'crypto';
 
 import { EventList as EventListEntity } from '@entity/eventList';
 import * as _ from 'lodash';
-import { Brackets, getRepository } from 'typeorm';
+import { Brackets } from 'typeorm';
 
+import Overlay from './_interface';
 import users from '../users';
 import eventlist from '../widgets/eventlist';
-import Overlay from './_interface';
 
+import { AppDataSource } from '~/database';
 import { warning } from '~/helpers/log';
 import { adminEndpoint, publicEndpoint } from '~/helpers/socket';
 import { isBotId } from '~/helpers/user/isBot';
@@ -18,10 +19,10 @@ class EventList extends Overlay {
 
   sockets () {
     adminEndpoint('/overlays/eventlist', 'eventlist::getUserEvents', async (userId, cb) => {
-      const eventsByUserId = await getRepository(EventListEntity).find({ userId: userId });
+      const eventsByUserId = await AppDataSource.getRepository(EventListEntity).findBy({ userId: userId });
       // we also need subgifts by giver
       const eventsByRecipientId
-        = (await getRepository(EventListEntity).find({ event: 'subgift' }))
+        = (await AppDataSource.getRepository(EventListEntity).findBy({ event: 'subgift' }))
           .filter(o => JSON.parse(o.values_json).fromId === userId);
       const events =  _.orderBy([ ...eventsByRecipientId, ...eventsByUserId ], 'timestamp', 'desc');
       // we need to change userId => username and fromId => fromId username for eventlist compatibility
@@ -50,7 +51,7 @@ class EventList extends Overlay {
       }));
     });
     publicEndpoint('/overlays/eventlist', 'getEvents', async (opts: { ignore: string[]; limit: number }, cb) => {
-      let events = await getRepository(EventListEntity)
+      let events = await AppDataSource.getRepository(EventListEntity)
         .createQueryBuilder('events')
         .select('events')
         .orderBy('events.timestamp', 'DESC')
@@ -58,6 +59,7 @@ class EventList extends Overlay {
           const ignored = opts.ignore.map(value => value.trim());
           for (let i = 0; i < ignored.length; i++) {
             qb.andWhere(`events.event != :event_${i}`, { ['event_' + i]: ignored[i] });
+            qb.andWhere(`events.isHidden != :isHidden`, { ['isHidden']: false });
           }
         }))
         .limit(opts.limit)
@@ -71,14 +73,18 @@ class EventList extends Overlay {
       // we need to change userId => username and from => from username for eventlist compatibility
       const mapping = new Map() as Map<string, string>;
       for (const event of events) {
-        const values = JSON.parse(event.values_json);
-        if (values.from && values.from != '0') {
-          if (!mapping.has(values.from)) {
-            mapping.set(values.from, await users.getNameById(values.from));
+        try {
+          const values = JSON.parse(event.values_json);
+          if (values.from && values.from != '0') {
+            if (!mapping.has(values.from)) {
+              mapping.set(values.from, await users.getNameById(values.from));
+            }
           }
-        }
-        if (!mapping.has(event.userId)) {
-          mapping.set(event.userId, await users.getNameById(event.userId));
+          if (!mapping.has(event.userId)) {
+            mapping.set(event.userId, await users.getNameById(event.userId));
+          }
+        } catch (e) {
+          console.error(e);
         }
       }
 
@@ -112,7 +118,7 @@ class EventList extends Overlay {
       });
     }
 
-    await getRepository(EventListEntity).save({
+    await AppDataSource.getRepository(EventListEntity).save({
       event:       data.event,
       userId:      data.userId,
       timestamp:   Date.now(),

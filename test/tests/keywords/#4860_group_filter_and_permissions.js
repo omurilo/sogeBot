@@ -1,12 +1,10 @@
 /* global */
 const assert = require('assert');
 
-const { getRepository } = require('typeorm');
-
 require('../../general.js');
 const { Keyword, KeywordGroup, KeywordResponses } = require('../../../dest/database/entity/keyword');
 const { prepare } = (require('../../../dest/helpers/commons/prepare'));
-const { defaultPermissions } = require('../../../dest/helpers/permissions/');
+const { defaultPermissions } = require('../../../dest/helpers/permissions/defaultPermissions');
 const keywords = (require('../../../dest/systems/keywords')).default;
 const db = require('../../general.js').db;
 const message = require('../../general.js').message;
