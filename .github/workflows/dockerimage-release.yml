@@ -104,7 +104,10 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          platforms: linux/amd64 #,linux/arm/v7,linux/arm64
           push: true
           tags: |
             omurilo/luacomtio-bot:latest
+            omurilo/luacomtio-bot:${{ steps.get_version.outputs.VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
