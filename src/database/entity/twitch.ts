@@ -1,5 +1,4 @@
 import { EntitySchema } from 'typeorm';
-import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer.js';
 

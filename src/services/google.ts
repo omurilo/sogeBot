@@ -4,7 +4,6 @@ import { app } from '~/helpers/panel';
 import { adminMiddleware } from '~/socket';
 import { onChange, onStartup, onStreamEnd, onStreamStart } from '~/decorators/on';
 import Service from './_interface';
-import { dayjs } from '@sogebot/ui-helpers/dayjsHelper';
 
 import { google, youtube_v3 } from 'googleapis';
 import { error, info, debug } from '~/helpers/log';

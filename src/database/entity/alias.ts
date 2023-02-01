@@ -1,5 +1,6 @@
 import { IsNotEmpty, MinLength } from 'class-validator';
 import { BaseEntity, Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 import { IsCommand } from '../validators/IsCommand';
 import { IsCommandOrCustomVariable } from '../validators/IsCommandOrCustomVariable';

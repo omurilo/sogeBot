@@ -1,5 +1,6 @@
 import { ArrayMinSize, IsNotEmpty, MinLength } from 'class-validator';
 import { BaseEntity, Column, Entity, IsNull, PrimaryColumn } from 'typeorm';
+import { v4 } from 'uuid';
 
 @Entity()
 export class Poll extends BaseEntity {

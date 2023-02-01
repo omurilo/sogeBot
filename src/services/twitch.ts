@@ -40,7 +40,6 @@ import { isIgnored } from '~/helpers/user/isIgnored';
 import { sendGameFromTwitch } from '~/services/twitch/calls/sendGameFromTwitch';
 import { updateChannelInfo } from '~/services/twitch/calls/updateChannelInfo';
 import { translate } from '~/translate';
-import { capitalize } from 'lodash';
 
 const urls = {
   'SogeBot Token Generator':    'https://twitch-token-generator.soge.workers.dev/refresh/',
