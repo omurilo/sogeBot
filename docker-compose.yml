@@ -1,6 +1,24 @@
 version: "3.2"
 
 services:
+  nginx:
+    image: nginx:1.15-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../proxy/nginx:/etc/nginx/conf.d
+      - ../proxy/certbot/conf:/etc/letsencrypt
+      - ../proxy/certbot/www:/var/www/certbot
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ../proxy/certbot/conf:/etc/letsencrypt
+      - ../proxy/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
   sogebot:
     #build:
      # dockerfile: ./Dockerfile
@@ -10,11 +28,11 @@ services:
     volumes:
       - $PWD/shared:/app/shared/
       - $PWD/logs:/app/logs/
-      - /etc/letsencrypt/live/luacomtio.omurilo.dev:/etc/cert/live/luacomtio.omurilo.dev
-      - /etc/letsencrypt/archive/luacomtio.omurilo.dev:/etc/cert/archive/luacomtio.omurilo.dev
+      # - /etc/letsencrypt/live/luacomtio.omurilo.dev:/etc/cert/live/luacomtio.omurilo.dev
+      # - /etc/letsencrypt/archive/luacomtio.omurilo.dev:/etc/cert/archive/luacomtio.omurilo.dev
     ports:
-      #- 80:20000 # change your output port
-      - 443:20443
+      - 20000:20000 # change your output port
+      # - 443:20443
       - 9229:9229 # uncomment to use --inspect port
     env_file:
       - ./.env
