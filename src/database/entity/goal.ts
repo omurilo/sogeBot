@@ -1,5 +1,4 @@
 import { EntitySchema } from 'typeorm';
-import { v4 } from 'uuid';
 
 import { ColumnNumericTransformer } from './_transformer';
 
@@ -68,7 +67,7 @@ export const GoalGroup = new EntitySchema<Readonly<Required<GoalGroupInterface>>
   name:    'goal_group',
   columns: {
     id: {
-      type: 'uuid', primary: true, default: v4(),
+      type: 'uuid', primary: true, generated: 'uuid',
     },
     createdAt: { type: String },
     name:      { type: String },
@@ -88,7 +87,7 @@ export const Goal = new EntitySchema<Readonly<Required<GoalInterface>>>({
   name:    'goal',
   columns: {
     id: {
-      type: 'uuid', primary: true, default: v4(),
+      type: 'uuid', primary: true, generated: 'uuid',
     },
     name:            { type: String },
     groupId:         { type: String, nullable: true },
