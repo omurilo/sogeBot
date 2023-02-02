@@ -1,5 +1,4 @@
 import { EntitySchema } from 'typeorm';
-import { v4 } from 'uuid';
 
 export interface ScrimMatchIdInterface {
   id?: string;
@@ -11,7 +10,7 @@ export const ScrimMatchId = new EntitySchema<Readonly<Required<ScrimMatchIdInter
   name:    'scrim_match_id',
   columns: {
     id: {
-      type: 'uuid', primary: true, default: v4(),
+      type: 'uuid', primary: true, generated: 'uuid',
     },
     username: { type: String },
     matchId:  { type: String },

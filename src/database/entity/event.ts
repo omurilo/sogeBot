@@ -1,5 +1,4 @@
 import { EntitySchema } from 'typeorm';
-import { v4 } from 'uuid';
 
 export declare namespace Events {
   export type Event = {
@@ -66,7 +65,7 @@ export const Event = new EntitySchema<Readonly<Required<EventInterface>>>({
   name:    'event',
   columns: {
     id: {
-      type: 'uuid', primary: true, default: v4(),
+      type: 'uuid', primary: true, generated: 'uuid',
     },
     name:        { type: String },
     isEnabled:   { type: Boolean },
@@ -91,7 +90,7 @@ export const EventOperation = new EntitySchema<Readonly<Required<EventOperationI
   name:    'event_operation',
   columns: {
     id: {
-      type: 'uuid', primary: true, default: v4(),
+      type: 'uuid', primary: true, generated: 'uuid',
     },
     name:        { type: String },
     definitions: { type: 'simple-json' },
