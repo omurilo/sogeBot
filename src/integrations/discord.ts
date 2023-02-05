@@ -1,61 +1,45 @@
-import { AppDataSource } from '~/database';
-import { isStreamOnline, stats } from '~/helpers/api';
-import { attributesReplace } from '~/helpers/attributesReplace';
-import {
-  announceTypes, getOwner, getUserSender, isUUID, prepare,
-} from '~/helpers/commons';
-import { isBotStarted, isDbConnected } from '~/helpers/database';
-import { debounce } from '~/helpers/debounce';
-
+import { SlashCommandBuilder } from '@discordjs/builders';
 import { DiscordLink } from '@entity/discord';
-
-import { eventEmitter } from '~/helpers/events';
-
 import { Events } from '@entity/event';
-
-import {
-  chatIn, chatOut, debug, error, info, warning, whisperOut,
-} from '~/helpers/log';
-
 import { Permissions as PermissionsEntity } from '@entity/permissions';
-
-import { check } from '~/helpers/permissions/check';
-
-import { User } from '@entity/user';
-
-import { get as getPermission } from '~/helpers/permissions/get';
-
+import { User, UserInterface } from '@entity/user';
 import { HOUR, MINUTE } from '@sogebot/ui-helpers/constants';
-
-import { adminEndpoint } from '~/helpers/socket';
-
 import { dayjs, timezone } from '@sogebot/ui-helpers/dayjsHelper';
-
-import * as changelog from '~/helpers/user/changelog.js';
-
 import chalk from 'chalk';
-
-import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
-import { variables } from '~/watchers';
-
 import * as DiscordJs from 'discord.js';
-import { ChannelType, GatewayIntentBits } from 'discord.js';
 import { get } from 'lodash';
 import { IsNull, LessThan, Not } from 'typeorm';
 import { v5 as uuidv5 } from 'uuid';
 
 import Integration from './_interface';
+
+import { AppDataSource } from '~/database';
 import {
   command, persistent, settings,
-} from '../decorators';
+} from '~/decorators';
 import {
   onChange, onStartup, onStreamEnd, onStreamStart,
-} from '../decorators/on';
-import events from '../events';
-import Expects from '../expects';
-import { Message } from '../message';
-import Parser from '../parser';
-import users from '../users';
+} from '~/decorators/on';
+import events from '~/events';
+import Expects from '~/expects';
+import { isStreamOnline, stats } from '~/helpers/api';
+import { attributesReplace } from '~/helpers/attributesReplace';
+import { announceTypes, getOwner, getUserSender, isUUID, prepare } from '~/helpers/commons';
+import { isBotStarted, isDbConnected } from '~/helpers/database';
+import { debounce } from '~/helpers/debounce';
+import { eventEmitter } from '~/helpers/events';
+import { chatIn, chatOut, debug, error, info, warning, whisperOut } from '~/helpers/log';
+import { check } from '~/helpers/permissions/check';
+import { get as getPermission } from '~/helpers/permissions/get';
+import { adminEndpoint } from '~/helpers/socket';
+import { tmiEmitter } from '~/helpers/tmi';
+import { isModerator } from '~/helpers/user';
+import * as changelog from '~/helpers/user/changelog.js';
+import { Message } from '~/message';
+import Parser from '~/parser';
+import { getIdFromTwitch } from '~/services/twitch/calls/getIdFromTwitch';
+import users from '~/users';
+import { variables } from '~/watchers';
 
 class Discord extends Integration {
   client: DiscordJs.Client | null = null;
@@ -85,15 +69,16 @@ class Discord extends Integration {
 
   @settings('bot')
     sendAnnouncesToChannel: { [key in typeof announceTypes[number]]: string } = {
-      bets:    '',
-      duel:    '',
-      general: '',
-      heist:   '',
-      polls:   '',
-      raffles: '',
-      scrim:   '',
-      songs:   '',
-      timers:  '',
+      bets:      '',
+      duel:      '',
+      general:   '',
+      heist:     '',
+      polls:     '',
+      raffles:   '',
+      scrim:     '',
+      songs:     '',
+      timers:    '',
+      moderator: '',
     };
 
   @settings('bot')
@@ -248,6 +233,7 @@ class Discord extends Integration {
             discordUser.roles.add(role).catch(roleError => {
               warning(`Cannot add role '${role.name}' to user ${user.userId}, check permission for bot (bot cannot set role above his own)`);
               warning(roleError);
+              debug('discord.roles', JSON.stringify(discordUser.roles.cache.values()));
             }).then(member => {
               debug('discord.roles', `User ${user.userId} have new role ${role.name}`);
             });
@@ -260,6 +246,7 @@ class Discord extends Integration {
             discordUser.roles.remove(role).catch(roleError => {
               warning('Cannot remove role to user, check permission for bot (bot cannot set role above his own)');
               warning(roleError);
+              debug('discord.roles', JSON.stringify(discordUser.roles.cache.values()));
             }).then(member => {
               debug('discord.roles', `User ${user.userId} have removed role ${role.name}`);
             });
@@ -352,6 +339,90 @@ class Discord extends Integration {
       }
     }
     this.embedMessageId = '';
+  }
+
+  extractUsernameAndReasonFromMsg(opts: any) {
+    const [username] = new Expects(opts.parameters).username({ prefix: 'username:\\s*', optional: false }).toArray();
+    const [reason] = new Expects(opts.parameters).reason({ prefix: 'reason:\\s*', optional: true }).toArray();
+
+    return { username, reason };
+  }
+
+  async banUser(username: string, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: string | DiscordJs.Attachment) {
+    tmiEmitter.emit('ban', username);
+    eventEmitter.emit('ban', {
+      userName: username,
+      reason:   reason || '<no reason>',
+    });
+
+    this.announceBan(author, username, user, reason, attachment);
+  }
+
+  async announceBan(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: string | DiscordJs.Attachment) {
+    const embedBody: DiscordJs.EmbedData = {
+      color:       author.accentColor || DiscordJs.Colors.DarkRed,
+      description: `${user.userName} baniu um usuário na live`,
+      title:       'Usuário banido na live',
+      fields:      [{ name: 'Nome de usuário', value: username }, { name: 'Motivo', value: reason || '' }],
+      footer:      {
+        text: 'Esse já era ou alguém é contra?',
+      },
+      author: {
+        name:    author.tag,
+        iconURL: author.avatarURL() || '',
+      },
+      timestamp: new Date(),
+    };
+
+    if (typeof attachment === 'string') {
+      embedBody.thumbnail = { url: attachment };
+    } else if (typeof attachment !== 'string' && attachment) {
+      embedBody.thumbnail = { url: attachment.url, proxyURL: attachment.proxyURL, height: attachment.height ?? 0, width: attachment.width ?? 0 };
+    }
+
+    const embed = new DiscordJs.EmbedBuilder(embedBody);
+
+    const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator);
+
+    await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
+    chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user banned on live]] [${username}]`);
+  }
+
+  async timeoutUser(username: string, seconds: number, author: DiscordJs.User, user: Readonly<Required<UserInterface>>, reason?: string, attachment?: string | DiscordJs.Attachment) {
+    tmiEmitter.emit('timeout', username, seconds, isModerator(user));
+    eventEmitter.emit('timeout', { userName: username, duration: seconds });
+
+    await this.announceTimeout(author, username, user, seconds, reason, attachment);
+  }
+
+  async announceTimeout(author: DiscordJs.User, username: string, user: Readonly<Required<UserInterface>>, duration: number, reason?: string, attachment?: string | DiscordJs.Attachment) {
+    const embedBody: DiscordJs.EmbedData = {
+      color:       author.accentColor || DiscordJs.Colors.DarkOrange,
+      description: `${user.userName} deu um timeout de ${duration} segundos em um usuário na live`,
+      title:       'Usuário "timeoutado" na live',
+      fields:      [{ name: 'Nome de usuário', value: username }, { name: 'Tempo', value: String(duration) }, { name: 'Motivo', value: reason || '' }],
+      footer:      {
+        text: 'Daqui a pouco ele volta, né?!',
+      },
+      author: {
+        name:    author.tag,
+        iconURL: author.avatarURL() || '',
+      },
+      timestamp: new Date(),
+    };
+
+    if (typeof attachment === 'string') {
+      embedBody.thumbnail = { url: attachment };
+    } else if (typeof attachment !== 'string' && attachment) {
+      embedBody.thumbnail = { url: attachment.url, proxyURL: attachment.proxyURL, height: attachment.height ?? 0, width: attachment.width ?? 0 };
+    }
+
+    const embed = new DiscordJs.EmbedBuilder(embedBody);
+
+    const channel = this.client?.guilds.cache.get(this.guild)?.channels.cache.get(this.sendAnnouncesToChannel.moderator);
+
+    await (channel as DiscordJs.TextChannel).send({ embeds: [embed] });
+    chatOut(`#${(channel as DiscordJs.TextChannel).name}: [[user timed out on live]] [${username}]`);
   }
 
   filterFields(o: string, isOnline: boolean) {
@@ -502,7 +573,7 @@ class Discord extends Integration {
 
       const message = attributesReplace(attributes, String(operation.messageToSend));
       const messageContent = await self.replaceLinkedUsernameInMessage(await new Message(message).parse());
-      const channel = await self.client.guilds.cache.get(self.guild)?.channels.cache.get(dMchannel);
+      const channel = self.client.guilds.cache.get(self.guild)?.channels.cache.get(dMchannel);
       await (channel as DiscordJs.TextChannel).send(messageContent);
       chatOut(`#${(channel as DiscordJs.TextChannel).name}: ${messageContent} [${self.client.user?.tag}]`);
     } catch (e: any) {
@@ -531,10 +602,10 @@ class Discord extends Integration {
     if (!this.client) {
       this.client = new DiscordJs.Client({
         intents: [
-          GatewayIntentBits.GuildMessages,
-          GatewayIntentBits.Guilds,
-          GatewayIntentBits.MessageContent,
-          GatewayIntentBits.DirectMessages,
+          DiscordJs.GatewayIntentBits.GuildMessages,
+          DiscordJs.GatewayIntentBits.Guilds,
+          DiscordJs.GatewayIntentBits.MessageContent,
+          DiscordJs.GatewayIntentBits.DirectMessages,
         ],
         partials: [
           DiscordJs.Partials.Reaction,
@@ -544,20 +615,283 @@ class Discord extends Integration {
       });
       this.client.on('ready', () => {
         if (this.client) {
-          info(chalk.yellow('DISCORD: ') + `Logged in as ${get(this.client, 'user.tag', 'unknown')}!`);
+          info(
+            chalk.yellow('DISCORD: ')
+              + `Logged in as ${get(this.client, 'user.tag', 'unknown')}!`
+          );
           this.changeClientOnlinePresence();
           this.updateRolesOfLinkedUsers();
+          const guild = this.client.guilds.cache.get(this.guild);
+
+          let commands;
+
+          if (guild) {
+            commands = guild.commands;
+          } else {
+            commands = this.client.application?.commands;
+          }
+
+          const modalCommand = new SlashCommandBuilder().setName('ban-or-timeout').setDescription('Banir ou Suspender usuário com prova do crime (print do motivo)')
+            .addAttachmentOption(option => option.setName('proof').setDescription('Prova do crime (print do motivo) (opcional)').setRequired(false))
+            .setDefaultMemberPermissions(DiscordJs.PermissionsBitField.Flags.BanMembers | DiscordJs.PermissionsBitField.Flags.KickMembers | DiscordJs.PermissionsBitField.Flags.MuteMembers);
+
+          commands?.create({ name: 'ping', description: 'Respond with pong' });
+          commands?.create(modalCommand.toJSON()).then(() => info(chalk.yellow('DISCORD: ') + 'modal ban-or-timeout slash command created'));
         }
       });
       this.client.on('error', (err) => {
         error(`DISCORD: ${err.stack || err.message}`);
       });
 
+      this.client.on('interactionCreate', async (interaction) => {
+        if (interaction.isButton()) {
+          if (interaction.customId === 'ban-confirm') {
+            const username = new DiscordJs.TextInputBuilder()
+              .setCustomId('username-input')
+              .setLabel('Nome do usuário na twitch')
+              .setStyle(DiscordJs.TextInputStyle.Short)
+              .setPlaceholder('Nome do usuário sem "@"')
+              .setRequired(true);
+
+            const reason = new DiscordJs.TextInputBuilder()
+              .setCustomId('reason-input')
+              .setLabel('Motivo do banimento')
+              .setStyle(DiscordJs.TextInputStyle.Paragraph)
+              .setPlaceholder('Eu quero banir o malandro porque ele estava fazendo tal coisa')
+              .setRequired(true);
+
+            const inputFileUrl = new DiscordJs.TextInputBuilder()
+              .setCustomId('proof-image-input')
+              .setLabel('Url da imagem de prova do malandro')
+              .setStyle(DiscordJs.TextInputStyle.Short)
+              .setValue(interaction.message.embeds[0].image?.url ?? '')
+              .setPlaceholder('Não precisa se não quiser');
+
+            const rows = [username, reason, inputFileUrl].map((component) => new DiscordJs.ActionRowBuilder<DiscordJs.TextInputBuilder>().addComponents(component));
+
+            const modal = new DiscordJs.ModalBuilder()
+              .setCustomId('ban-modal')
+              .setTitle('Informe os dados para o banimento')
+              .addComponents(...rows);
+
+            await interaction.showModal(modal);
+          } else if (interaction.customId === 'timeout-confirm') {
+            const username = new DiscordJs.TextInputBuilder()
+              .setCustomId('username-input')
+              .setLabel('Nome do usuário na twitch')
+              .setStyle(DiscordJs.TextInputStyle.Short)
+              .setPlaceholder('Nome do usuário sem "@"')
+              .setRequired(true);
+
+            const time = new DiscordJs.StringSelectMenuBuilder()
+              .setCustomId('time-input')
+              .setPlaceholder('Duração da suspensão (segundos)')
+              .setMinValues(15)
+              .setMaxValues(60*60*24)
+              .addOptions({
+                label:       '15s',
+                description: 'Suspender usuário por 15s',
+                value:       String(15),
+                default:     true,
+              }, {
+                label:       '30s',
+                description: 'Suspender usuário por 30s',
+                value:       String(30),
+              }, {
+                label:       '1 min',
+                description: 'Suspender usuário por 1 min',
+                value:       String(60),
+              }, {
+                label:       '5 min',
+                description: 'Suspender usuário por 5 min',
+                value:       String(60 * 5),
+              }, {
+                label:       '10 min',
+                description: 'Suspender usuário por 10 min',
+                value:       String(60 * 10),
+              }, {
+                label:       '15 min',
+                description: 'Suspender usuário por 15 min',
+                value:       String(60 * 15),
+              }, {
+                label:       '30 min',
+                description: 'Suspender usuário por 30 min',
+                value:       String(60 * 30),
+              }, {
+                label:       '1 hour',
+                description: 'Suspender usuário por 1 hour',
+                value:       String(60 * 60),
+              }, {
+                label:       '12 hours',
+                description: 'Suspender usuário por 12 hours',
+                value:       String(60 * 60 * 12),
+              }, {
+                label:       '1 Day',
+                description: 'Suspender usuário por 1 Day',
+                value:       String(60 * 60 * 24),
+              });
+
+            const reason = new DiscordJs.TextInputBuilder()
+              .setCustomId('reason-input')
+              .setLabel('Motivo da suspensão')
+              .setStyle(DiscordJs.TextInputStyle.Paragraph)
+              .setPlaceholder('Ex: Eu quero suspender o malandro porque ele estava fazendo tal coisa')
+              .setRequired(true);
+
+            const inputFileUrl = new DiscordJs.TextInputBuilder()
+              .setCustomId('proof-image-input')
+              .setLabel('Url da imagem de prova do malandro')
+              .setStyle(DiscordJs.TextInputStyle.Short)
+              .setValue(interaction.message.embeds[0].image?.url ?? '')
+              .setPlaceholder('Não precisa se não quiser');
+
+            const rows = [username, time, reason, inputFileUrl].map(
+              (component) => new DiscordJs.ActionRowBuilder<DiscordJs.TextInputBuilder | DiscordJs.StringSelectMenuBuilder>()
+                .addComponents(component)
+            );
+
+            const modal = new DiscordJs.ModalBuilder()
+              .setCustomId('timeout-modal')
+              .setTitle('Informe os dados para a suspensão')
+              .addComponents(...rows);
+
+            await interaction.showModal(modal);
+          }
+        }
+
+        if (interaction.isModalSubmit()) {
+          const username = interaction.fields.getTextInputValue('username-input');
+          const reason = interaction.fields.getTextInputValue('reason-input');
+          const proofUrl = interaction.fields.getTextInputValue('proof-image-input');
+          const time = interaction.fields.getTextInputValue('time-input');
+
+          if (['ban-modal', 'timeout-modal'].includes(interaction.customId)) {
+            try {
+              await interaction.deferReply({
+                ephemeral: true,
+              });
+
+              const link = await AppDataSource.getRepository(DiscordLink).findOneByOrFail({
+                discordId: interaction.user.id,
+                userId:    Not(IsNull()),
+              });
+
+              const user = await changelog.getOrFail(link.userId!);
+
+              if (!isModerator(user)) {
+                interaction.editReply({
+                  content: prepare('permissions.without-permission', {
+                    command: '/ban-or-timeout',
+                  }),
+                });
+              }
+
+              if (interaction.customId === 'ban-modal') {
+                await this.banUser(
+                  username!,
+                  interaction.user,
+                  user,
+                  reason || undefined,
+                  proofUrl || undefined
+                );
+              } else if (interaction.customId === 'timeout-modal'){
+                await this.timeoutUser(
+                  username!,
+                  Number(time),
+                  interaction.user,
+                  user,
+                  reason || undefined,
+                  proofUrl || undefined
+                );
+              }
+
+              interaction.editReply({
+                content: 'Recebemos o seu pedido e ele já foi processado, se deu certo poderás vê-lo no canal de banimentos e timeouts!',
+              });
+            } catch (e: unknown) {
+              if (
+                (e as DiscordJs.ErrorEvent).message.includes(
+                  'Could not find any entity of type "discord_link" matching'
+                )
+              ) {
+                interaction.reply({
+                  content: prepare(
+                    'integrations.discord.your-account-is-not-linked',
+                    { command: this.getCommand('!link') }
+                  ),
+                });
+              }
+            }
+          }
+        }
+
+        if (!interaction.isChatInputCommand()) {
+          return;
+        }
+
+        const { commandName, options } = interaction;
+
+        if (commandName === 'ban-or-timeout') {
+          await interaction.deferReply({ ephemeral: true });
+          const attachment = options.getAttachment('proof');
+          const row = new DiscordJs.ActionRowBuilder<DiscordJs.ButtonBuilder>();
+
+          const confirmBanButton = new DiscordJs.ButtonBuilder()
+            .setCustomId('ban-confirm')
+            .setStyle(DiscordJs.ButtonStyle.Success)
+            .setLabel('Quero banir um malandro');
+
+          const confirmTimeoutButton = new DiscordJs.ButtonBuilder()
+            .setCustomId('timeout-confirm')
+            .setStyle(DiscordJs.ButtonStyle.Link)
+            .setLabel('Quero suspender um malandro');
+
+          const denyButton = new DiscordJs.ButtonBuilder()
+            .setCustomId('ban-cancel')
+            .setStyle(DiscordJs.ButtonStyle.Danger)
+            .setLabel('Eu fiz sem querer');
+
+          row.addComponents(confirmBanButton, confirmTimeoutButton, denyButton);
+
+          const embed = new DiscordJs.EmbedBuilder()
+            .setTitle('Banimento/Suspensão de usuário')
+            .setDescription('Você vai banir/suspender um usuário? Então escolhe e clica em um dos botões ai embaixo e informa o nome do malandro pra nois!');
+
+          if (attachment?.url) {
+            embed.setImage(attachment.url);
+          }
+
+          interaction.editReply({
+            components: [row],
+            embeds:     [embed],
+          });
+
+          const collector = interaction.channel?.createMessageComponentCollector({ componentType: DiscordJs.ComponentType.Button, max: 1 });
+
+          collector?.on('end', async i => {
+            if (['ban-confirm', 'timeout-confirm', 'ban-cancel'].includes(i.first()?.customId || '')) {
+              const rowComponents = row.components.map(b => {
+                return DiscordJs.ButtonBuilder.from(b).setDisabled(true);
+              });
+
+              row.setComponents(rowComponents);
+
+              interaction.editReply({ embeds: [embed], components: [row] });
+            }
+          });
+        } else if (commandName === 'ping') {
+          interaction.reply({
+            content:   'Pong mermão',
+            ephemeral: true,
+          });
+        }
+      });
+
       this.client.on('messageCreate', async (msg) => {
         if (this.client && this.guild) {
 
           const isSelf = msg.author.tag === get(this.client, 'user.tag', null);
-          const isDM = msg.channel.type === ChannelType.DM;
+          const isDM = msg.channel.type === DiscordJs.ChannelType.DM;
           const isDifferentGuild = msg.guild?.id !== this.guild;
           const isInIgnoreList
              = this.ignorelist.includes(msg.author.tag)
@@ -567,7 +901,7 @@ class Discord extends Integration {
             return;
           }
 
-          if (msg.channel.type === ChannelType.GuildText) {
+          if (msg.channel.type === DiscordJs.ChannelType.GuildText) {
             const listenAtChannels = [
               ...Array.isArray(this.listenAtChannels) ? this.listenAtChannels : [this.listenAtChannels],
             ].filter(o => o !== '');
@@ -580,7 +914,7 @@ class Discord extends Integration {
     }
   }
 
-  async message(content: string, channel: DiscordJsTextChannel, author: DiscordJsUser, msg?: DiscordJs.Message) {
+  async message(content: string, channel: DiscordJs.TextChannel, author: DiscordJs.User, msg?: DiscordJs.Message) {
     chatIn(`#${channel.name}: ${content} [${author.tag}]`);
     if (msg) {
       const broadcasterUsername = variables.get('services.twitch.broadcasterUsername') as string;
@@ -666,7 +1000,7 @@ class Discord extends Integration {
           if (responses) {
             for (let i = 0; i < responses.length; i++) {
               setTimeout(async () => {
-                if (channel.type === ChannelType.GuildText) {
+                if (channel.type === DiscordJs.ChannelType.GuildText) {
                   const messageToSend = await new Message(await responses[i].response).parse({
                     ...responses[i].attr,
                     forceWithoutAt: true, // we dont need @
@@ -695,7 +1029,7 @@ class Discord extends Integration {
       }
     } catch (e: any) {
       const message = prepare('integrations.discord.your-account-is-not-linked', { command: this.getCommand('!link') });
-      if (msg) {
+      if (msg && !msg.content.startsWith('!')) {
         const reply = await msg.reply(message);
         chatOut(`#${channel.name}: @${author.tag}, ${message} [${author.tag}]`);
         if (this.deleteMessagesAfterWhile) {
@@ -763,7 +1097,7 @@ class Discord extends Integration {
       try {
         if (this.client && this.guild) {
           cb(null, this.client.guilds.cache.get(this.guild)?.channels.cache
-            .filter(o => o.type === ChannelType.GuildText)
+            .filter(o => o.type === DiscordJs.ChannelType.GuildText)
             .sort((a, b) => {
               const nameA = (a as DiscordJs.TextChannel).name.toUpperCase(); // ignore upper and lowercase
               const nameB = (b as DiscordJs.TextChannel).name.toUpperCase(); // ignore upper and lowercase
