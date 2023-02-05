@@ -1,11 +1,10 @@
 import { IsNotEmpty, MinLength } from 'class-validator';
 import { ManyToOne, OneToMany } from 'typeorm';
 import { BaseEntity, Column, Entity, Index, PrimaryColumn } from 'typeorm';
-import { v4 } from 'uuid';
 
 @Entity()
 export class Keyword extends BaseEntity {
-  @PrimaryColumn({ default: v4(), type: 'uuid' })
+  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
     id: string;
 
   @Column()
@@ -26,7 +25,7 @@ export class Keyword extends BaseEntity {
 
 @Entity()
 export class KeywordResponses extends BaseEntity {
-  @PrimaryColumn({ default: v4(), type: 'uuid' })
+  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
     id: string;
 
   @Column()

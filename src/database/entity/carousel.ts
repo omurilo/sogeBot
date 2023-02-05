@@ -1,5 +1,4 @@
 import { EntitySchema } from 'typeorm';
-import { v4 } from 'uuid';
 
 export interface CarouselInterface {
   id?: string;
@@ -20,7 +19,7 @@ export const Carousel = new EntitySchema<Readonly<Required<CarouselInterface>>>(
   name:    'carousel',
   columns: {
     id: {
-      type: String, primary: true, default: v4(),
+      type: String, primary: true, generated: 'uuid',
     },
     order:                 { type: Number },
     type:                  { type: String },

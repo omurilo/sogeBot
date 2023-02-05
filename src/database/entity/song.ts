@@ -1,5 +1,5 @@
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
-import { v4 } from 'uuid';
+
 import { BotEntity } from '../BotEntity';
 
 export type currentSongType = {
@@ -53,7 +53,7 @@ export class SongPlaylist extends BotEntity<SongPlaylist> {
 
 @Entity()
 export class SongRequest extends BotEntity<SongRequest> {
-  @PrimaryColumn({ default: v4() })
+  @PrimaryColumn({ generated: 'uuid' })
     id: string;
 
   @Column()

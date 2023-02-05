@@ -1,10 +1,10 @@
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
-import { v4 } from 'uuid';
+
 import { BotEntity } from '~/database/BotEntity';
 
 @Entity()
 export class Highlight extends BotEntity<Highlight> {
-  @PrimaryColumn({ default: v4(), type: 'uuid' })
+  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
     id: string;
 
   @Column()

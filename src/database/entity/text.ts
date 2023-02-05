@@ -1,5 +1,4 @@
 import { EntitySchema } from 'typeorm';
-import { v4 } from 'uuid';
 
 export interface TextInterface {
   id?: string;
@@ -14,7 +13,7 @@ export const Text = new EntitySchema<Readonly<Required<TextInterface>>>({
   name:    'text',
   columns: {
     id: {
-      type: String, primary: true, default: v4(),
+      type: String, primary: true, generated: 'uuid',
     },
     name:     { type: String },
     text:     { type: 'text' },

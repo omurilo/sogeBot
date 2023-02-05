@@ -1,14 +1,14 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, Index, PrimaryColumn } from 'typeorm';
-import { v4 } from 'uuid';
-import { BotEntity } from '~/database/BotEntity';
 import { IsNotEmpty, MinLength } from 'class-validator';
+import { BeforeInsert, BeforeUpdate, Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 import { ColumnNumericTransformer } from './_transformer';
+
+import { BotEntity } from '~/database/BotEntity';
 
 @Entity()
 @Index('IDX_301758e0e3108fc902d5436527', ['game'], { unique: true })
 export class HowLongToBeatGame extends BotEntity<HowLongToBeatGame> {
-  @PrimaryColumn({ default: v4(), type: 'uuid' })
+  @PrimaryColumn({ generated: 'uuid', type: 'uuid' })
     id: string;
 
   @Column()
