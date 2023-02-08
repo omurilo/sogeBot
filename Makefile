@@ -44,10 +44,8 @@ endif
 	@npx tsc-alias
 
 pack:
-	@echo -ne "\n\t ----- Packing into sogeBot-$(VERSION).zip\n"
-	@cp ./src/data/.env* ./
-	@cp ./src/data/.env.sqlite ./.env
-	@npx --yes bestzip sogeBot-$(VERSION).zip .commit .npmrc .env* package-lock.json patches/ dest/ locales/ LICENSE package.json docs/ AUTHORS tools/ bin/ bat/ fonts.json assets/ favicon.ico
+	@echo -ne "\n\t ----- Packing into luacomtio-bot-$(VERSION).zip\n"
+	@npx --yes bestzip luacomtio-bot-$(VERSION).zip .npmrc package-lock.json patches/ dest/ locales/ LICENSE package.json docs/ AUTHORS tools/ bin/ bat/ fonts.json assets/ favicon.ico
 
 prepare:
 	@echo -ne "\n\t ----- Cleaning up node_modules\n"

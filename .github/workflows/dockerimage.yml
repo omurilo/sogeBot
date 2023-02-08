@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - master
+      - luacomtio
 
 jobs:
   artifact:
@@ -43,7 +44,7 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
-          name: sogeBot-${{ steps.slug.outputs.SHA }}
+          name: luacomtio-bot-${{ steps.slug.outputs.SHA }}
           path: ${{ github.workspace }}/*.zip
 
   build:
@@ -72,7 +73,7 @@ jobs:
 
       - uses: actions/download-artifact@master
         with:
-          name: sogeBot-${{ steps.slug.outputs.SHA }}
+          name: luacomtio-bot-${{ steps.slug.outputs.SHA }}
           path: ${{ github.workspace }}/*.zip
 
       -
@@ -83,7 +84,7 @@ jobs:
           platforms: linux/amd64,linux/arm/v7,linux/arm64
           push: true
           tags: |
-            sogebot/nightly:latest
-            sogebot/nightly:${{ github.sha }}
-          cache-from: type=gha
+            omurilo/luacomtio-bot-nightly:latest
+            omurilo/luacomtio-bot-nightly:${{ github.sha }}
+            cache-from: type=gha
           cache-to: type=gha,mode=max
