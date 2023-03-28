@@ -1,0 +1,77 @@
+version: "3.2"
+
+services:
+  nginx:
+    image: nginx:1.15-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../proxy/nginx:/etc/nginx/conf.d
+      - ../proxy/certbot/conf:/etc/letsencrypt
+      - ../proxy/certbot/www:/var/www/certbot
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    depends_on:
+      - sogebot
+      - certbot
+      - pgadmin
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ../proxy/certbot/conf:/etc/letsencrypt
+      - ../proxy/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+  sogebot:
+    image: omurilo/luacomtio-bot:latest
+    restart: always
+    volumes:
+      - $PWD/shared:/app/shared/
+      - $PWD/logs:/app/logs/
+    ports:
+      - 20000:20000 # change your output port
+      # - 443:20443
+      - 9229:9229 # uncomment to use --inspect port
+    env_file:
+      - ./.env
+    environment:
+      # ensure locale exists in container, you may need to install it
+      LANG: pt_BR.UTF-8
+      NODE_OPTIONS: --max_old_space_size=1024 # uncomment to set max 4GB RAM usage (default 2GB)
+      #PROFILER: y # uncomment to enable --inspect
+    depends_on:
+      - db
+
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_PASSWORD: ${TYPEORM_PASSWORD}
+      POSTGRES_USER: ${TYPEORM_USERNAME}
+      POSTGRES_DB: ${TYPEORM_DATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    ports:
+      - 8080:80
+    env_file:
+      - ./.env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PG_ADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PG_ADMIN_PSSWD}
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'True'
+      PGADMIN_CONFIG_LOGIN_BANNER: '"Authorized users only!"'
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 10
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
