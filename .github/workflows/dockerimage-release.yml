@@ -41,13 +41,13 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
-          name: sogeBot
+          name: luacomtio-sogeBot
           path: ${{ github.workspace }}/*.zip
 
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          name: SOGEBOT ${{ github.ref_name }}
+          name: LUACOMTIO ${{ github.ref_name }}
           artifacts: "*.zip"
           bodyFile: "body.md"
           makeLatest: true
@@ -79,7 +79,7 @@ jobs:
 
       - uses: actions/download-artifact@master
         with:
-          name: sogeBot
+          name: luacomtio-sogeBot
           path: ${{ github.workspace }}/*.zip
 
       -
@@ -87,10 +87,26 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          platforms: linux/amd64 #,linux/arm/v7,linux/arm64
           push: true
           tags: |
-            sogebot/release:latest
-            sogebot/release:${{ steps.get_version.outputs.VERSION }}
+            omurilo/luacomtio-bot:latest
+            omurilo/luacomtio-bot:${{ steps.get_version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deployment:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Connect SSH and update Docker image
+        run:
+          doctl compute ssh ${{ secrets.DIGITALOCEAN_DROPLET_ID }}
+
+      - name: Go to app source and run docker-compose
+        run: cd sogebot && docker-compose down && docker-compose up -d
